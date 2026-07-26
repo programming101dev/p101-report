@@ -1,11 +1,14 @@
-#define main p101_test_unused_main
-#include "../src/main.c"
-#undef main
-
+#include "cli.h"
+#include "constants.h"
+#include "errors.h"
+#include "model.h"
+#include "parse.h"
+#include "types.h"
 #include "unity.h"
 #include <p101_c/p101_string.h>
 #include <p101_env/env.h>
 #include <p101_error/error.h>
+#include <p101_posix/p101_unistd.h>
 #include <stdbool.h>
 
 static struct p101_error *error;
@@ -44,8 +47,8 @@ static void test_parse_accepts_report_directory(void)
     reset_getopt();
     p101_memset(env, &args, 0, sizeof(args));
 
-    parse_arguments(env, error, 2, argv, &args);
-    check_arguments(env, error, &args, resources, sizeof(resources), calls, sizeof(calls));
+    p101_report_parse_arguments(env, error, 2, argv, &args);
+    p101_report_check_arguments(env, error, &args, resources, sizeof(resources), calls, sizeof(calls));
 
     TEST_ASSERT_FALSE(p101_error_has_error(error));
     TEST_ASSERT_EQUAL_STRING("run-report", args.report_dir);
@@ -63,8 +66,8 @@ static void test_parse_accepts_explicit_logs(void)
     reset_getopt();
     p101_memset(env, &args, 0, sizeof(args));
 
-    parse_arguments(env, error, 6, argv, &args);
-    check_arguments(env, error, &args, resources, sizeof(resources), calls, sizeof(calls));
+    p101_report_parse_arguments(env, error, 6, argv, &args);
+    p101_report_check_arguments(env, error, &args, resources, sizeof(resources), calls, sizeof(calls));
 
     TEST_ASSERT_FALSE(p101_error_has_error(error));
     TEST_ASSERT_NULL(args.report_dir);
@@ -83,8 +86,8 @@ static void test_parse_rejects_missing_call_log(void)
     reset_getopt();
     p101_memset(env, &args, 0, sizeof(args));
 
-    parse_arguments(env, error, 3, argv, &args);
-    check_arguments(env, error, &args, resources, sizeof(resources), calls, sizeof(calls));
+    p101_report_parse_arguments(env, error, 3, argv, &args);
+    p101_report_check_arguments(env, error, &args, resources, sizeof(resources), calls, sizeof(calls));
 
     TEST_ASSERT_TRUE(p101_error_is_error(error, P101_ERROR_USER, ERR_USAGE));
 }
@@ -99,7 +102,7 @@ static void test_parse_resource_line_accepts_fd_open(void)
     p101_memset(env, &model, 0, sizeof(model));
     p101_memset(env, &event, 0, sizeof(event));
 
-    status = parse_resource_line(env, error, line, &event, &model, 1);
+    status = p101_report_parse_resource_line(env, error, line, &event, &model, 1);
 
     TEST_ASSERT_EQUAL_INT(LINE_OK, status);
     TEST_ASSERT_EQUAL_INT64(42, event.pid);
@@ -109,8 +112,8 @@ static void test_parse_resource_line_accepts_fd_open(void)
     TEST_ASSERT_EQUAL_STRING("main", model.sites[event.site].function_name);
     TEST_ASSERT_EQUAL_INT(17, model.sites[event.site].line_number);
 
-    free_resource_event(env, &event);
-    free_model(env, &model);
+    p101_report_free_resource_event(env, &event);
+    p101_report_free_model(env, &model);
 }
 
 static void test_parse_call_line_accepts_exit(void)
@@ -121,7 +124,7 @@ static void test_parse_call_line_accepts_exit(void)
 
     p101_memset(env, &event, 0, sizeof(event));
 
-    status = parse_call_line(env, error, line, &event, 1);
+    status = p101_report_parse_call_line(env, error, line, &event, 1);
 
     TEST_ASSERT_EQUAL_INT(LINE_OK, status);
     TEST_ASSERT_EQUAL_INT64(42, event.pid);
@@ -129,7 +132,7 @@ static void test_parse_call_line_accepts_exit(void)
     TEST_ASSERT_EQUAL_STRING("p101_open", event.call_name);
     TEST_ASSERT_EQUAL_STRING("3", event.result);
 
-    free_call_event(env, &event);
+    p101_report_free_call_event(env, &event);
 }
 
 int main(void)

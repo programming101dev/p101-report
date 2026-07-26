@@ -30,12 +30,36 @@ set(LIBRARY_TARGETS "")
 set(main_OUTPUT_NAME p101-report)
 
 set(main_SOURCES
+        src/cli.c
+        src/finding.c
+        src/io.c
+        src/json.c
+        src/lifetime.c
         src/main.c
+        src/model.c
+        src/output.c
+        src/parse.c
+        src/reader.c
+        src/runner.c
+        src/text.c
 )
 
 set(main_HEADERS
         include/arguments.h
+        include/cli.h
+        include/constants.h
         include/errors.h
+        include/finding.h
+        include/io.h
+        include/json.h
+        include/lifetime.h
+        include/model.h
+        include/output.h
+        include/parse.h
+        include/reader.h
+        include/runner.h
+        include/text.h
+        include/types.h
 )
 
 set(main_LINK_LIBRARIES
