@@ -89,7 +89,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
         const char *target_text;
         long        cloexec;
 
-        primary_text  = p101_report_split_tab(&cursor);
+        primary_text  = kind_text;
         cloexec_text  = p101_report_split_tab(&cursor);
         line_text     = p101_report_split_tab(&cursor);
         function_name = p101_report_split_tab(&cursor);
