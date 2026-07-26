@@ -131,11 +131,15 @@ void p101_report_print_finding(const struct p101_env *env, struct p101_error *er
     const struct source_site *site;
 
     site = &model->sites[finding->site];
-    p101_printf(env, err, "%zu. %s\n", ordinal, p101_report_finding_name(finding->kind));
+    p101_printf(env, err, "%zu. %s %s\n", ordinal, p101_report_finding_id(finding->kind), p101_report_finding_name(finding->kind));
 
-    if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE)
+    if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE || finding->kind == FINDING_EXEC_INHERIT)
     {
         p101_printf(env, err, "   resource: fd %d, pid %ld, resource event #%zu\n", finding->fd, finding->pid, finding->sequence);
+        if(finding->kind == FINDING_EXEC_INHERIT)
+        {
+            p101_printf(env, err, "   exec:     target %s would inherit this descriptor without FD_CLOEXEC\n", finding->ptr == NULL ? "?" : finding->ptr);
+        }
     }
     else
     {
@@ -190,13 +194,20 @@ void p101_report_print_json_finding(const struct p101_env *env, struct p101_erro
 
     site = &model->sites[finding->site];
 
-    p101_fputs(env, err, "    {\"kind\": ", stdout);
+    p101_fputs(env, err, "    {\"id\": ", stdout);
+    p101_report_json_string(env, err, stdout, p101_report_finding_id(finding->kind));
+    p101_fputs(env, err, ", \"kind\": ", stdout);
     p101_report_json_string(env, err, stdout, p101_report_finding_name(finding->kind));
     p101_printf(env, err, ", \"pid\": %ld", finding->pid);
 
-    if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE)
+    if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE || finding->kind == FINDING_EXEC_INHERIT)
     {
         p101_printf(env, err, ", \"fd\": %d", finding->fd);
+        if(finding->kind == FINDING_EXEC_INHERIT)
+        {
+            p101_fputs(env, err, ", \"target\": ", stdout);
+            p101_report_json_string(env, err, stdout, finding->ptr == NULL ? "?" : finding->ptr);
+        }
     }
     else
     {

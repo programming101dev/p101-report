@@ -241,6 +241,32 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
             }
             break;
         }
+        case RESOURCE_EXEC:
+        {
+            if(event->cloexec == 0)
+            {
+                for(index = 0; index < model->fd_count; index++)
+                {
+                    if(model->fds[index].pid == event->pid && model->fds[index].fd == event->fd)
+                    {
+                        struct finding finding;
+
+                        p101_memset(env, &finding, 0, sizeof(finding));
+                        finding.kind              = FINDING_EXEC_INHERIT;
+                        finding.pid               = event->pid;
+                        finding.fd                = event->fd;
+                        finding.ptr               = event->target;
+                        finding.site              = event->site;
+                        finding.sequence          = event->sequence;
+                        finding.previous_site     = model->fds[index].site;
+                        finding.previous_sequence = model->fds[index].sequence;
+                        p101_report_add_finding(env, err, model, &finding);
+                        break;
+                    }
+                }
+            }
+            break;
+        }
         default:
         {
             break;
@@ -332,6 +358,10 @@ static void p101_report_add_resource_event(const struct p101_env *env, struct p1
     if(event->new_ptr != NULL)
     {
         copy->new_ptr = p101_report_dup_text(env, err, event->new_ptr);
+    }
+    if(event->target != NULL)
+    {
+        copy->target = p101_report_dup_text(env, err, event->target);
     }
     model->resource_count++;
 
@@ -449,8 +479,10 @@ void p101_report_free_resource_event(const struct p101_env *env, struct resource
 {
     p101_free(env, event->ptr);
     p101_free(env, event->new_ptr);
+    p101_free(env, event->target);
     event->ptr     = NULL;
     event->new_ptr = NULL;
+    event->target  = NULL;
 }
 
 void p101_report_free_call_event(const struct p101_env *env, struct call_event *event)

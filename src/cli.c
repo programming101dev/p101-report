@@ -168,6 +168,7 @@ done:
 
 _Noreturn void p101_report_usage(const struct p101_env *env, struct p101_error *err, const char *program_name, int exit_code, const char *message)
 {
+#ifndef P101_SUPPRESS_USAGE_TEXT
     FILE *stream;
 
     stream = (exit_code == EXIT_CLEAN) ? stdout : stderr;
@@ -189,6 +190,11 @@ _Noreturn void p101_report_usage(const struct p101_env *env, struct p101_error *
     p101_fputs(env, err, "  -d <report-dir>     read resources.log and calls.log from a p101-observe report directory\n", stream);
     p101_fputs(env, err, "  -r <resources.log>  resource log to replay\n", stream);
     p101_fputs(env, err, "  -c <calls.log>      call log to correlate\n", stream);
+#else
+    (void)err;
+    (void)message;
+    (void)program_name;
+#endif
 
     p101_exit(env, exit_code);
 }

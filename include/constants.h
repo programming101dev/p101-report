@@ -4,6 +4,7 @@
 #define FD_PREFIX "P101FD\t"
 #define ALLOC_PREFIX "P101ALLOC\t"
 #define FORK_PREFIX "P101FORK\t"
+#define EXEC_PREFIX "P101EXEC\t"
 #define CALL_PREFIX "P101CALL\t"
 
 enum

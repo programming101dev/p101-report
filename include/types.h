@@ -10,7 +10,8 @@ enum resource_kind
     RESOURCE_ALLOC,
     RESOURCE_FREE,
     RESOURCE_REALLOC,
-    RESOURCE_FORK
+    RESOURCE_FORK,
+    RESOURCE_EXEC
 };
 
 enum call_kind
@@ -35,7 +36,8 @@ enum finding_kind
     FINDING_STRAY_CLOSE,
     FINDING_DOUBLE_FREE,
     FINDING_STRAY_FREE,
-    FINDING_BAD_REALLOC
+    FINDING_BAD_REALLOC,
+    FINDING_EXEC_INHERIT
 };
 
 struct source_site
@@ -51,8 +53,10 @@ struct resource_event
     long               pid;
     long               child_pid;
     int                fd;
+    int                cloexec;
     char              *ptr;
     char              *new_ptr;
+    char              *target;
     size_t             size;
     size_t             site;
     size_t             sequence;

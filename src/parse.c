@@ -34,7 +34,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
         goto done;
     }
 
-    if(!p101_report_line_has_prefix(env, line, FD_PREFIX) && !p101_report_line_has_prefix(env, line, ALLOC_PREFIX) && !p101_report_line_has_prefix(env, line, FORK_PREFIX))
+    if(!p101_report_line_has_prefix(env, line, FD_PREFIX) && !p101_report_line_has_prefix(env, line, ALLOC_PREFIX) && !p101_report_line_has_prefix(env, line, FORK_PREFIX) && !p101_report_line_has_prefix(env, line, EXEC_PREFIX))
     {
         status = LINE_OTHER;
         goto done;
@@ -82,6 +82,41 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
         event->site      = p101_report_intern_site(env, err, model, file_name, function_name, (int)line_number);
         event->sequence  = sequence;
         status           = LINE_OK;
+    }
+    else if(p101_strcmp(env, magic, "P101EXEC") == 0)
+    {
+        const char *cloexec_text;
+        const char *target_text;
+        long        cloexec;
+
+        primary_text  = p101_report_split_tab(&cursor);
+        cloexec_text  = p101_report_split_tab(&cursor);
+        line_text     = p101_report_split_tab(&cursor);
+        function_name = p101_report_split_tab(&cursor);
+        file_name     = p101_report_split_tab(&cursor);
+        target_text   = p101_report_split_tab(&cursor);
+
+        if(cursor != NULL || primary_text == NULL || cloexec_text == NULL || line_text == NULL || function_name == NULL || file_name == NULL || target_text == NULL)
+        {
+            goto done;
+        }
+
+        if(!p101_report_parse_long_field(primary_text, INT_MIN, INT_MAX, &fd_or_line) || !p101_report_parse_long_field(cloexec_text, 0, 1, &cloexec) || !p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
+        {
+            goto done;
+        }
+
+        event->kind     = RESOURCE_EXEC;
+        event->pid      = pid;
+        event->fd       = (int)fd_or_line;
+        event->cloexec  = (int)cloexec;
+        event->target   = p101_report_dup_text(env, err, target_text);
+        event->site     = p101_report_intern_site(env, err, model, file_name, function_name, (int)line_number);
+        event->sequence = sequence;
+        if(p101_error_has_no_error(err))
+        {
+            status = LINE_OK;
+        }
     }
     else if(p101_strcmp(env, magic, "P101FD") == 0)
     {

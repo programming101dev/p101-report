@@ -51,6 +51,11 @@ static const char *p101_report_resource_kind_name(enum resource_kind kind)
             name = "fork";
             break;
         }
+        case RESOURCE_EXEC:
+        {
+            name = "exec";
+            break;
+        }
         default:
         {
             name = "unknown";

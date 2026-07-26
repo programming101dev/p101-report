@@ -72,6 +72,11 @@ const char *p101_report_finding_name(enum finding_kind kind)
             name = "realloc of unknown pointer";
             break;
         }
+        case FINDING_EXEC_INHERIT:
+        {
+            name = "descriptor inherited across exec";
+            break;
+        }
         default:
         {
             name = "unknown finding";
@@ -83,4 +88,67 @@ const char *p101_report_finding_name(enum finding_kind kind)
 #endif
 
     return name;
+}
+
+const char *p101_report_finding_id(enum finding_kind kind)
+{
+    const char *id;
+
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
+    switch(kind)
+    {
+        case FINDING_FD_LEAK:
+        {
+            id = "P101-FD-001";
+            break;
+        }
+        case FINDING_DOUBLE_CLOSE:
+        {
+            id = "P101-FD-002";
+            break;
+        }
+        case FINDING_STRAY_CLOSE:
+        {
+            id = "P101-FD-003";
+            break;
+        }
+        case FINDING_ALLOC_LEAK:
+        {
+            id = "P101-ALLOC-001";
+            break;
+        }
+        case FINDING_DOUBLE_FREE:
+        {
+            id = "P101-ALLOC-002";
+            break;
+        }
+        case FINDING_STRAY_FREE:
+        {
+            id = "P101-ALLOC-003";
+            break;
+        }
+        case FINDING_BAD_REALLOC:
+        {
+            id = "P101-ALLOC-004";
+            break;
+        }
+        case FINDING_EXEC_INHERIT:
+        {
+            id = "P101-FD-004";
+            break;
+        }
+        default:
+        {
+            id = "P101-UNKNOWN-000";
+            break;
+        }
+    }
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
+
+    return id;
 }
