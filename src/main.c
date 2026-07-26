@@ -173,8 +173,13 @@ static enum line_status parse_call_line(const struct p101_env *env, struct p101_
 static void             ingest_resource(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event);
 static void             finalize_leaks(const struct p101_env *env, struct p101_error *err, struct report_model *model);
 static void             print_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model);
+static void             print_text_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model);
+static void             print_json_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model);
 static void             print_finding(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding, size_t ordinal);
 static void             print_trace_context(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding);
+static void             print_json_finding(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding);
+static void             print_json_trace_context(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding);
+static void             json_string(const struct p101_env *env, struct p101_error *err, FILE *stream, const char *text);
 static size_t           intern_site(const struct p101_env *env, struct p101_error *err, struct report_model *model, const char *file_name, const char *function_name, int line_number);
 static void             add_finding(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct finding *finding);
 static void             add_call(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct call_event *event);
@@ -206,6 +211,7 @@ enum
     PATH_MAX_BYTES      = 4096,
     MSG_LEN             = 256,
     DECIMAL_BASE        = 10,
+    JSON_CONTROL_LIMIT  = 0x20U,
     FIRST_CAPACITY      = 16,
     TRACE_CONTEXT_LIMIT = 5,
     EXIT_CLEAN          = 0,
@@ -278,7 +284,7 @@ static void parse_arguments(const struct p101_env *env, struct p101_error *err, 
     P101_TRACE(env);
     opterr = 0;
 
-    while((opt = p101_getopt(env, argc, argv, ":hvd:r:c:")) != -1 && p101_error_has_no_error(err))
+    while((opt = p101_getopt(env, argc, argv, ":hvjd:r:c:")) != -1 && p101_error_has_no_error(err))
     {
         switch(opt)
         {
@@ -289,6 +295,11 @@ static void parse_arguments(const struct p101_env *env, struct p101_error *err, 
             case 'v':
             {
                 args->verbose = true;
+                break;
+            }
+            case 'j':
+            {
+                args->format = REPORT_FORMAT_JSON;
                 break;
             }
             case 'd':
@@ -997,6 +1008,35 @@ static void finalize_leaks(const struct p101_env *env, struct p101_error *err, s
 
 static void print_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
 {
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
+    switch(args->format)
+    {
+        case REPORT_FORMAT_TEXT:
+        {
+            print_text_report(env, err, args, model);
+            break;
+        }
+        case REPORT_FORMAT_JSON:
+        {
+            print_json_report(env, err, args, model);
+            break;
+        }
+        default:
+        {
+            print_text_report(env, err, args, model);
+            break;
+        }
+    }
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
+}
+
+static void print_text_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
+{
     size_t index;
 
     P101_TRACE(env);
@@ -1023,6 +1063,44 @@ static void print_report(const struct p101_env *env, struct p101_error *err, con
 
 done:
     return;
+}
+
+static void print_json_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
+{
+    p101_fputs(env, err, "{\n", stdout);
+    p101_fputs(env, err, "  \"resource_log\": ", stdout);
+    json_string(env, err, stdout, args->resource_log);
+    p101_fputs(env, err, ",\n  \"call_log\": ", stdout);
+    json_string(env, err, stdout, args->call_log);
+    p101_fputs(env, err, ",\n  \"summary\": {\n", stdout);
+    p101_printf(env, err, "    \"resource_records\": %zu,\n", model->resource_records);
+    p101_printf(env, err, "    \"resource_skipped\": %zu,\n", model->resource_skipped);
+    p101_printf(env, err, "    \"resource_malformed\": %zu,\n", model->resource_malformed);
+    p101_printf(env, err, "    \"resource_bad_version\": %zu,\n", model->resource_bad_version);
+    p101_printf(env, err, "    \"call_records\": %zu,\n", model->call_records);
+    p101_printf(env, err, "    \"call_skipped\": %zu,\n", model->call_skipped);
+    p101_printf(env, err, "    \"call_malformed\": %zu,\n", model->call_malformed);
+    p101_printf(env, err, "    \"call_bad_version\": %zu,\n", model->call_bad_version);
+    p101_printf(env, err, "    \"findings\": %zu\n", model->finding_count);
+    p101_fputs(env, err, "  },\n  \"findings\": [", stdout);
+
+    for(size_t i = 0; i < model->finding_count && p101_error_has_no_error(err); i++)
+    {
+        if(i > 0U)
+        {
+            p101_fputs(env, err, ",", stdout);
+        }
+
+        p101_fputs(env, err, "\n", stdout);
+        print_json_finding(env, err, model, &model->findings[i]);
+    }
+
+    if(model->finding_count > 0U)
+    {
+        p101_fputs(env, err, "\n", stdout);
+    }
+
+    p101_fputs(env, err, "  ]\n}\n", stdout);
 }
 
 static void print_finding(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding, size_t ordinal)
@@ -1081,6 +1159,133 @@ static void print_trace_context(const struct p101_env *env, struct p101_error *e
     {
         p101_printf(env, err, "     no matching call records for this source site\n");
     }
+}
+
+static void print_json_finding(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding)
+{
+    const struct source_site *site;
+
+    site = &model->sites[finding->site];
+
+    p101_fputs(env, err, "    {\"kind\": ", stdout);
+    json_string(env, err, stdout, finding_name(finding->kind));
+    p101_printf(env, err, ", \"pid\": %ld", finding->pid);
+
+    if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE)
+    {
+        p101_printf(env, err, ", \"fd\": %d", finding->fd);
+    }
+    else
+    {
+        p101_fputs(env, err, ", \"ptr\": ", stdout);
+        json_string(env, err, stdout, finding->ptr == NULL ? "-" : finding->ptr);
+        p101_printf(env, err, ", \"bytes\": %zu", finding->size);
+    }
+
+    p101_printf(env, err, ", \"resource_event\": %zu", finding->sequence);
+    p101_fputs(env, err, ", \"site\": {\"file\": ", stdout);
+    json_string(env, err, stdout, site->file_name);
+    p101_printf(env, err, ", \"line\": %d, \"function\": ", site->line_number);
+    json_string(env, err, stdout, site->function_name);
+    p101_fputs(env, err, "}", stdout);
+
+    if(finding->previous_sequence != 0U && finding->previous_site < model->site_count)
+    {
+        const struct source_site *previous;
+
+        previous = &model->sites[finding->previous_site];
+        p101_fprintf(env, err, stdout, ", \"previous\": {\"resource_event\": %zu, \"file\": ", finding->previous_sequence);
+        json_string(env, err, stdout, previous->file_name);
+        p101_printf(env, err, ", \"line\": %d, \"function\": ", previous->line_number);
+        json_string(env, err, stdout, previous->function_name);
+        p101_fputs(env, err, "}", stdout);
+    }
+
+    p101_fputs(env, err, ", \"trace\": [", stdout);
+    print_json_trace_context(env, err, model, finding);
+    p101_fputs(env, err, "]}", stdout);
+}
+
+static void print_json_trace_context(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding)
+{
+    const struct source_site *site;
+    size_t                    printed;
+
+    site    = &model->sites[finding->site];
+    printed = 0;
+
+    for(size_t i = 0; i < model->call_count && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); i++)
+    {
+        const struct call_event *call;
+
+        call = &model->calls[i];
+
+        if(!site_matches_call(env, site, call, finding->pid))
+        {
+            continue;
+        }
+
+        if(printed > 0U)
+        {
+            p101_fputs(env, err, ", ", stdout);
+        }
+
+        p101_printf(env, err, "{\"sequence\": %zu, \"event\": ", call->sequence);
+        json_string(env, err, stdout, call->kind == CALL_ENTER ? "ENTER" : "EXIT");
+        p101_fputs(env, err, ", \"call\": ", stdout);
+        json_string(env, err, stdout, call->call_name);
+        p101_fputs(env, err, ", \"arguments\": ", stdout);
+        json_string(env, err, stdout, call->arguments);
+        p101_fputs(env, err, ", \"result\": ", stdout);
+        json_string(env, err, stdout, call->result);
+        p101_fputs(env, err, ", \"file\": ", stdout);
+        json_string(env, err, stdout, call->file_name);
+        p101_printf(env, err, ", \"line\": %d, \"function\": ", call->line_number);
+        json_string(env, err, stdout, call->function_name);
+        p101_fputs(env, err, "}", stdout);
+        printed++;
+    }
+}
+
+static void json_string(const struct p101_env *env, struct p101_error *err, FILE *stream, const char *text)
+{
+    const unsigned char *cursor;
+
+    p101_fputc(env, err, '\"', stream);
+
+    cursor = (const unsigned char *)(text == NULL ? "" : text);
+    while(*cursor != '\0' && p101_error_has_no_error(err))
+    {
+        if(*cursor == '\"' || *cursor == '\\')
+        {
+            p101_fputc(env, err, '\\', stream);
+            p101_fputc(env, err, (int)*cursor, stream);
+        }
+        else if(*cursor == '\n')
+        {
+            p101_fputs(env, err, "\\n", stream);
+        }
+        else if(*cursor == '\r')
+        {
+            p101_fputs(env, err, "\\r", stream);
+        }
+        else if(*cursor == '\t')
+        {
+            p101_fputs(env, err, "\\t", stream);
+        }
+        else if(*cursor < JSON_CONTROL_LIMIT)
+        {
+            p101_fprintf(env, err, stream, "\\u%04x", (unsigned)*cursor);
+        }
+        else
+        {
+            p101_fputc(env, err, (int)*cursor, stream);
+        }
+
+        cursor++;
+    }
+
+    p101_fputc(env, err, '\"', stream);
 }
 
 static size_t intern_site(const struct p101_env *env, struct p101_error *err, struct report_model *model, const char *file_name, const char *function_name, int line_number)
@@ -1520,13 +1725,14 @@ _Noreturn static void usage(const struct p101_env *env, struct p101_error *err, 
         p101_fprintf(env, err, stream, "%s\n\n", message);
     }
 
-    p101_fprintf(env, err, stream, "Usage: %s [-h] [-v] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]\n", program_name);
+    p101_fprintf(env, err, stream, "Usage: %s [-h] [-v] [-j] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]\n", program_name);
     p101_fputs(env, err, "\n", stream);
     p101_fputs(env, err, "Correlate p101 resource and call logs into one report.\n", stream);
     p101_fputs(env, err, "\n", stream);
     p101_fputs(env, err, "Options:\n", stream);
     p101_fputs(env, err, "  -h                  show this help\n", stream);
     p101_fputs(env, err, "  -v                  trace p101-report itself\n", stream);
+    p101_fputs(env, err, "  -j                  write JSON instead of the text report\n", stream);
     p101_fputs(env, err, "  -d <report-dir>     read resources.log and calls.log from a p101-observe report directory\n", stream);
     p101_fputs(env, err, "  -r <resources.log>  resource log to replay\n", stream);
     p101_fputs(env, err, "  -c <calls.log>      call log to correlate\n", stream);

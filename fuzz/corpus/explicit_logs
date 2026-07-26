@@ -1,1 +1,1 @@
--r resources.log -c calls.log
+-j -r resources.log -c calls.log

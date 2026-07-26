@@ -7,6 +7,7 @@ Quick reference for `p101-report`. Every script also supports `--help`.
 | Command | What it does |
 | --- | --- |
 | `p101-report run-report` | Correlate `run-report/resources.log` and `run-report/calls.log` |
+| `p101-report -j run-report` | Write the correlated report as JSON |
 | `p101-report -d run-report` | Same, explicit directory option |
 | `p101-report -r resources.log -c calls.log` | Correlate explicit log paths |
 | `p101-report -v run-report` | Enable p101 tracing inside the reporter |

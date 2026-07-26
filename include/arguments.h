@@ -3,12 +3,19 @@
 
 #include <stdbool.h>
 
+enum report_format
+{
+    REPORT_FORMAT_TEXT = 0,
+    REPORT_FORMAT_JSON
+};
+
 struct arguments
 {
-    const char *report_dir;
-    const char *resource_log;
-    const char *call_log;
-    bool        verbose;
+    const char        *report_dir;
+    const char        *resource_log;
+    const char        *call_log;
+    enum report_format format;
+    bool               verbose;
 };
 
 #endif    // P101_REPORT_ARGUMENTS_H

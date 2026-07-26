@@ -13,7 +13,7 @@ happened here?” layer above `p101-resource-tracker` and `p101-trace`.
 ## Usage
 
 ```sh
-p101-report [-h] [-v] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]
+p101-report [-h] [-v] [-j] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]
 ```
 
 Examples:
@@ -21,6 +21,7 @@ Examples:
 ```sh
 p101-observe -o run-report -- ./my-program config.txt
 p101-report run-report
+p101-report -j run-report
 
 p101-report -r run-report/resources.log -c run-report/calls.log
 ```
@@ -45,6 +46,9 @@ findings with trace context:
      #9 ENTER p101_open(path=config.txt) -> - at server.c:41 in open_config
      #10 EXIT  p101_open(-) -> 3 at server.c:41 in open_config
 ```
+
+Use `-j` for the same report as JSON when another tool or grading script needs
+to consume the result.
 
 The goal is not to replace the lower-level tools. `p101-resource-tracker` remains
 the strict analyzer, and `p101-trace` remains the dedicated call-log renderer.
