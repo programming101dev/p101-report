@@ -245,6 +245,63 @@ void p101_report_print_json_lifetimes(const struct p101_env *env, struct p101_er
     }
 }
 
+void p101_report_print_mermaid_lifetimes(const struct p101_env *env, struct p101_error *err, const struct report_model *model)
+{
+    size_t printed;
+
+    printed = 0U;
+    for(size_t i = 0; i < model->resource_count && p101_error_has_no_error(err); i++)
+    {
+        const struct resource_event *birth;
+        const struct resource_event *death;
+        const char                  *resource_name;
+
+        birth = &model->resources[i];
+        death = NULL;
+
+        if(birth->kind == RESOURCE_FD_OPEN)
+        {
+            resource_name = "fd";
+            death         = p101_report_find_fd_lifetime_end(env, model, birth);
+        }
+        else if(birth->kind == RESOURCE_ALLOC || (birth->kind == RESOURCE_REALLOC && birth->new_ptr != NULL && p101_strcmp(env, birth->new_ptr, "-") != 0))
+        {
+            resource_name = "alloc";
+            death         = p101_report_find_alloc_lifetime_end(env, model, birth);
+        }
+        else
+        {
+            continue;
+        }
+
+        if(printed >= LIFETIME_TEXT_LIMIT)
+        {
+            continue;
+        }
+
+        p101_printf(env, err, "    summary --> b%zu[\"#%zu %s %s\"]\n", birth->sequence, birth->sequence, resource_name, p101_report_resource_kind_name(birth->kind));
+
+        if(death == NULL)
+        {
+            p101_printf(env, err, "    b%zu --> leak%zu[\"still live at exit\"]\n", birth->sequence, birth->sequence);
+            p101_printf(env, err, "    leak%zu:::leak\n", birth->sequence);
+        }
+        else
+        {
+            p101_printf(env, err, "    b%zu --> d%zu[\"#%zu %s\"]\n", birth->sequence, death->sequence, death->sequence, p101_report_resource_kind_name(death->kind));
+        }
+
+        printed++;
+    }
+
+    if(printed == 0U)
+    {
+        p101_fputs(env, err, "    summary --> empty[\"no open/alloc lifetimes recorded\"]\n", stdout);
+    }
+
+    p101_fputs(env, err, "    classDef leak fill:#ffd6d6,stroke:#a33,stroke-width:2px\n", stdout);
+}
+
 static void p101_report_print_json_lifetime(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct resource_event *birth)
 {
     const struct source_site    *site;

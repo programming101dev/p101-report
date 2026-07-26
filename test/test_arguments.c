@@ -76,6 +76,23 @@ static void test_parse_accepts_explicit_logs(void)
     TEST_ASSERT_EQUAL_STRING("calls.log", args.call_log);
 }
 
+static void test_parse_accepts_mermaid_output(void)
+{
+    char             *argv[] = {"p101-report", "-m", "-r", "resources.log", "-c", "calls.log", NULL};
+    struct arguments  args;
+    char              resources[PATH_MAX_BYTES];
+    char              calls[PATH_MAX_BYTES];
+
+    reset_getopt();
+    p101_memset(env, &args, 0, sizeof(args));
+
+    p101_report_parse_arguments(env, error, 6, argv, &args);
+    p101_report_check_arguments(env, error, &args, resources, sizeof(resources), calls, sizeof(calls));
+
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+    TEST_ASSERT_EQUAL_INT(REPORT_FORMAT_MERMAID, args.format);
+}
+
 static void test_parse_rejects_missing_call_log(void)
 {
     char             *argv[] = {"p101-report", "-r", "resources.log", NULL};
@@ -140,6 +157,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_parse_accepts_report_directory);
     RUN_TEST(test_parse_accepts_explicit_logs);
+    RUN_TEST(test_parse_accepts_mermaid_output);
     RUN_TEST(test_parse_rejects_missing_call_log);
     RUN_TEST(test_parse_resource_line_accepts_fd_open);
     RUN_TEST(test_parse_call_line_accepts_exit);

@@ -13,7 +13,7 @@ happened here?” layer above `p101-resource-tracker` and `p101-trace`.
 ## Usage
 
 ```sh
-p101-report [-h] [-v] [-j] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]
+p101-report [-h] [-v] [-j|-m] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]
 ```
 
 Examples:
@@ -22,6 +22,7 @@ Examples:
 p101-observe -o run-report -- ./my-program config.txt
 p101-report run-report
 p101-report -j run-report
+p101-report -m run-report > resource-lifetimes.md
 
 p101-report -r run-report/resources.log -c run-report/calls.log
 ```
@@ -48,7 +49,8 @@ findings with trace context:
 ```
 
 Use `-j` for the same report as JSON when another tool or grading script needs
-to consume the result.
+to consume the result. Use `-m` to render resource lifetimes as a Mermaid graph
+for Markdown viewers that support Mermaid.
 
 The goal is not to replace the lower-level tools. `p101-resource-tracker` remains
 the strict analyzer, and `p101-trace` remains the dedicated call-log renderer.

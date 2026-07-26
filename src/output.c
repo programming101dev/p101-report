@@ -24,6 +24,11 @@ void p101_report_print_report(const struct p101_env *env, struct p101_error *err
             p101_report_print_json_report(env, err, args, model);
             break;
         }
+        case REPORT_FORMAT_MERMAID:
+        {
+            p101_report_print_mermaid_report(env, err, args, model);
+            break;
+        }
         default:
         {
             p101_report_print_text_report(env, err, args, model);
@@ -33,6 +38,17 @@ void p101_report_print_report(const struct p101_env *env, struct p101_error *err
 #ifdef __clang__
     #pragma clang diagnostic pop
 #endif
+}
+
+void p101_report_print_mermaid_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
+{
+    P101_TRACE(env);
+    p101_fputs(env, err, "```mermaid\n", stdout);
+    p101_fputs(env, err, "flowchart LR\n", stdout);
+    p101_printf(env, err, "    summary[\"resources: %zu records; calls: %zu records; findings: %zu\"]\n", model->resource_records, model->call_records, model->finding_count);
+    p101_report_print_mermaid_lifetimes(env, err, model);
+    p101_fputs(env, err, "```\n", stdout);
+    (void)args;
 }
 
 void p101_report_print_text_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)

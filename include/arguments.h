@@ -6,7 +6,8 @@
 enum report_format
 {
     REPORT_FORMAT_TEXT = 0,
-    REPORT_FORMAT_JSON
+    REPORT_FORMAT_JSON,
+    REPORT_FORMAT_MERMAID
 };
 
 struct arguments

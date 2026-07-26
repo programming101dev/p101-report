@@ -23,7 +23,7 @@ void p101_report_parse_arguments(const struct p101_env *env, struct p101_error *
     P101_TRACE(env);
     opterr = 0;
 
-    while((opt = p101_getopt(env, argc, argv, ":hvjd:r:c:")) != -1 && p101_error_has_no_error(err))
+    while((opt = p101_getopt(env, argc, argv, ":hvjmd:r:c:")) != -1 && p101_error_has_no_error(err))
     {
         switch(opt)
         {
@@ -39,6 +39,11 @@ void p101_report_parse_arguments(const struct p101_env *env, struct p101_error *
             case 'j':
             {
                 args->format = REPORT_FORMAT_JSON;
+                break;
+            }
+            case 'm':
+            {
+                args->format = REPORT_FORMAT_MERMAID;
                 break;
             }
             case 'd':
@@ -172,7 +177,7 @@ _Noreturn void p101_report_usage(const struct p101_env *env, struct p101_error *
         p101_fprintf(env, err, stream, "%s\n\n", message);
     }
 
-    p101_fprintf(env, err, stream, "Usage: %s [-h] [-v] [-j] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]\n", program_name);
+    p101_fprintf(env, err, stream, "Usage: %s [-h] [-v] [-j|-m] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]\n", program_name);
     p101_fputs(env, err, "\n", stream);
     p101_fputs(env, err, "Correlate p101 resource and call logs into one report.\n", stream);
     p101_fputs(env, err, "\n", stream);
@@ -180,6 +185,7 @@ _Noreturn void p101_report_usage(const struct p101_env *env, struct p101_error *
     p101_fputs(env, err, "  -h                  show this help\n", stream);
     p101_fputs(env, err, "  -v                  trace p101-report itself\n", stream);
     p101_fputs(env, err, "  -j                  write JSON instead of the text report\n", stream);
+    p101_fputs(env, err, "  -m                  write Mermaid resource lifetime graph instead of the text report\n", stream);
     p101_fputs(env, err, "  -d <report-dir>     read resources.log and calls.log from a p101-observe report directory\n", stream);
     p101_fputs(env, err, "  -r <resources.log>  resource log to replay\n", stream);
     p101_fputs(env, err, "  -c <calls.log>      call log to correlate\n", stream);
