@@ -65,6 +65,14 @@ The goal is not to replace the lower-level tools. `p101-resource-tracker` remain
 the strict analyzer, and `p101-trace` remains the dedicated call-log renderer.
 `p101-report` correlates their raw inputs into one teaching-friendly narrative.
 
+## Boundaries
+
+`p101-report` only knows what is present in `resources.log` and `calls.log`.
+Missing wrapper events, direct non-p101 calls, third-party behavior, and schema
+features not represented in the v1 logs are outside its model. The correlated
+story is replayable evidence from those logs, not proof about unobserved
+executions.
+
 ## Exit status
 
 | Status | Meaning |
