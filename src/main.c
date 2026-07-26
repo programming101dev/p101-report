@@ -19,7 +19,8 @@ enum resource_kind
     RESOURCE_FD_CLOSE,
     RESOURCE_ALLOC,
     RESOURCE_FREE,
-    RESOURCE_REALLOC
+    RESOURCE_REALLOC,
+    RESOURCE_FORK
 };
 
 enum call_kind
@@ -58,6 +59,7 @@ struct resource_event
 {
     enum resource_kind kind;
     long               pid;
+    long               child_pid;
     int                fd;
     char              *ptr;
     char              *new_ptr;
@@ -202,6 +204,7 @@ _Noreturn static void   usage(const struct p101_env *env, struct p101_error *err
 
 static const char FD_PREFIX[]    = "P101FD\t";
 static const char ALLOC_PREFIX[] = "P101ALLOC\t";
+static const char FORK_PREFIX[]  = "P101FORK\t";
 static const char CALL_PREFIX[]  = "P101CALL\t";
 
 enum
@@ -477,6 +480,10 @@ static void read_resources(const struct p101_env *env, struct p101_error *err, c
         p101_memset(env, &event, 0, sizeof(event));
         status = parse_resource_line(env, err, line, &event, model, model->resource_records + 1U);
 
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
         switch(status)
         {
             case LINE_OTHER:
@@ -500,7 +507,15 @@ static void read_resources(const struct p101_env *env, struct p101_error *err, c
                 model->resource_bad_version++;
                 break;
             }
+            default:
+            {
+                model->resource_malformed++;
+                break;
+            }
         }
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 
         free_resource_event(env, &event);
     }
@@ -525,6 +540,10 @@ static void read_calls(const struct p101_env *env, struct p101_error *err, const
         p101_memset(env, &event, 0, sizeof(event));
         status = parse_call_line(env, err, line, &event, model->call_records + 1U);
 
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
         switch(status)
         {
             case LINE_OTHER:
@@ -549,7 +568,15 @@ static void read_calls(const struct p101_env *env, struct p101_error *err, const
                 model->call_bad_version++;
                 break;
             }
+            default:
+            {
+                model->call_malformed++;
+                break;
+            }
         }
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 
         free_call_event(env, &event);
     }
@@ -573,6 +600,7 @@ static enum line_status parse_resource_line(const struct p101_env *env, struct p
     const char      *file_name;
     long             version;
     long             pid;
+    long             child_pid;
     long             fd_or_line;
     long             line_number;
     size_t           size;
@@ -584,7 +612,7 @@ static enum line_status parse_resource_line(const struct p101_env *env, struct p
         goto done;
     }
 
-    if(!line_has_prefix(env, line, FD_PREFIX) && !line_has_prefix(env, line, ALLOC_PREFIX))
+    if(!line_has_prefix(env, line, FD_PREFIX) && !line_has_prefix(env, line, ALLOC_PREFIX) && !line_has_prefix(env, line, FORK_PREFIX))
     {
         status = LINE_OTHER;
         goto done;
@@ -610,7 +638,30 @@ static enum line_status parse_resource_line(const struct p101_env *env, struct p
         goto done;
     }
 
-    if(p101_strcmp(env, magic, "P101FD") == 0)
+    if(p101_strcmp(env, magic, "P101FORK") == 0)
+    {
+        line_text     = split_tab(&cursor);
+        function_name = split_tab(&cursor);
+        file_name     = split_tab(&cursor);
+
+        if(cursor != NULL || kind_text == NULL || line_text == NULL || function_name == NULL || file_name == NULL)
+        {
+            goto done;
+        }
+
+        if(!parse_long_field(kind_text, LONG_MIN, LONG_MAX, &child_pid) || !parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
+        {
+            goto done;
+        }
+
+        event->kind      = RESOURCE_FORK;
+        event->pid       = pid;
+        event->child_pid = child_pid;
+        event->site      = intern_site(env, err, model, file_name, function_name, (int)line_number);
+        event->sequence  = sequence;
+        status           = LINE_OK;
+    }
+    else if(p101_strcmp(env, magic, "P101FD") == 0)
     {
         primary_text  = split_tab(&cursor);
         line_text     = split_tab(&cursor);
@@ -796,6 +847,10 @@ static void ingest_resource(const struct p101_env *env, struct p101_error *err, 
 
     P101_TRACE(env);
 
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
     switch(event->kind)
     {
         case RESOURCE_FD_OPEN:
@@ -969,7 +1024,61 @@ static void ingest_resource(const struct p101_env *env, struct p101_error *err, 
             }
             break;
         }
+        case RESOURCE_FORK:
+        {
+            size_t original_fd_count;
+
+            original_fd_count = model->fd_count;
+            for(index = 0; index < original_fd_count && p101_error_has_no_error(err); index++)
+            {
+                bool   child_has_live_fd;
+                bool   child_closed_fd;
+                size_t probe;
+
+                if(model->fds[index].pid != event->pid)
+                {
+                    continue;
+                }
+
+                child_has_live_fd = false;
+                for(probe = 0; probe < model->fd_count; probe++)
+                {
+                    if(model->fds[probe].pid == event->child_pid && model->fds[probe].fd == model->fds[index].fd)
+                    {
+                        child_has_live_fd = true;
+                        break;
+                    }
+                }
+
+                child_closed_fd = false;
+                for(probe = 0; probe < model->closed_fd_count; probe++)
+                {
+                    if(model->closed_fds[probe].pid == event->child_pid && model->closed_fds[probe].fd == model->fds[index].fd)
+                    {
+                        child_closed_fd = true;
+                        break;
+                    }
+                }
+
+                if(!child_has_live_fd && !child_closed_fd && grow_array(env, err, (void **)&model->fds, &model->fd_capacity, model->fd_count, sizeof(*model->fds)))
+                {
+                    model->fds[model->fd_count].pid      = event->child_pid;
+                    model->fds[model->fd_count].fd       = model->fds[index].fd;
+                    model->fds[model->fd_count].site     = model->fds[index].site;
+                    model->fds[model->fd_count].sequence = event->sequence;
+                    model->fd_count++;
+                }
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
     }
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 }
 
 static void finalize_leaks(const struct p101_env *env, struct p101_error *err, struct report_model *model)
@@ -1624,6 +1733,10 @@ static const char *finding_name(enum finding_kind kind)
 {
     const char *name;
 
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
     switch(kind)
     {
         case FINDING_FD_LEAK:
@@ -1661,7 +1774,15 @@ static const char *finding_name(enum finding_kind kind)
             name = "realloc of unknown pointer";
             break;
         }
+        default:
+        {
+            name = "unknown finding";
+            break;
+        }
     }
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 
     return name;
 }
