@@ -52,6 +52,11 @@ Use `-j` for the same report as JSON when another tool or grading script needs
 to consume the result. Use `-m` to render resource lifetimes as a Mermaid graph
 for Markdown viewers that support Mermaid.
 
+JSON output includes `event_schema` and `event_id_policy`. The event IDs shown
+in reports are derived from the 1-based parsed-record sequence in each input
+stream. The canonical v1 log contract is documented by `p101-observe` in
+`docs/event-format.md`.
+
 The goal is not to replace the lower-level tools. `p101-resource-tracker` remains
 the strict analyzer, and `p101-trace` remains the dedicated call-log renderer.
 `p101-report` correlates their raw inputs into one teaching-friendly narrative.

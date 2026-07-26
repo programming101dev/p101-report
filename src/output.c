@@ -57,6 +57,7 @@ void p101_report_print_text_report(const struct p101_env *env, struct p101_error
 
     P101_TRACE(env);
     p101_printf(env, err, "p101-report\n");
+    p101_printf(env, err, "event schema: p101-event-format-v1\n");
     p101_printf(env, err, "resource log: %s\n", args->resource_log);
     p101_printf(env, err, "call log:     %s\n\n", args->call_log);
 
@@ -86,6 +87,8 @@ done:
 void p101_report_print_json_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
 {
     p101_fputs(env, err, "{\n", stdout);
+    p101_fputs(env, err, "  \"event_schema\": \"p101-event-format-v1\",\n", stdout);
+    p101_fputs(env, err, "  \"event_id_policy\": \"derived-1-based-input-sequence\",\n", stdout);
     p101_fputs(env, err, "  \"resource_log\": ", stdout);
     p101_report_json_string(env, err, stdout, args->resource_log);
     p101_fputs(env, err, ",\n  \"call_log\": ", stdout);
