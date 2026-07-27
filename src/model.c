@@ -1,6 +1,7 @@
 #include "model.h"
 #include "constants.h"
 #include "finding.h"
+#include <stdint.h>
 
 static void p101_report_add_finding(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct finding *finding);
 static void p101_report_add_resource_event(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event);

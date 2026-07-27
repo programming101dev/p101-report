@@ -23,6 +23,11 @@ void p101_report_parse_arguments(const struct p101_env *env, struct p101_error *
     P101_TRACE(env);
     opterr = 0;
 
+    if(argc == 2 && p101_strcmp(env, argv[1], "--help") == 0)
+    {
+        p101_report_usage(env, err, argv[0], EXIT_SUCCESS, NULL);
+    }
+
     while((opt = p101_getopt(env, argc, argv, ":hvjmd:r:c:")) != -1 && p101_error_has_no_error(err))
     {
         switch(opt)

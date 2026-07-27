@@ -33,7 +33,7 @@ void p101_report_json_string(const struct p101_env *env, struct p101_error *err,
         {
             p101_fputs(env, err, "\\t", stream);
         }
-        else if(*cursor < JSON_CONTROL_LIMIT)
+        else if(*cursor < JSON_CONTROL_LIMIT || *cursor >= JSON_NON_ASCII_LIMIT)
         {
             p101_fprintf(env, err, stream, "\\u%04x", (unsigned)*cursor);
         }

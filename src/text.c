@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 char *p101_report_split_tab(char **cursor)

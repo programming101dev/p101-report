@@ -7,6 +7,33 @@
 #include <p101_c/p101_string.h>
 #include <stdio.h>
 
+static bool p101_report_line_is_complete(const struct p101_env *env, struct p101_error *err, FILE *stream, char *line);
+
+static bool p101_report_line_is_complete(const struct p101_env *env, struct p101_error *err, FILE *stream, char *line)
+{
+    bool   complete;
+    size_t length;
+
+    complete = true;
+    length   = p101_strlen(env, line);
+
+    if(length == LINE_MAX_BYTES - 1U && p101_strchr(env, line, '\n') == NULL)
+    {
+        char discard[LINE_MAX_BYTES];
+
+        complete = false;
+        while(p101_error_has_no_error(err) && p101_fgets(env, err, discard, sizeof(discard), stream) != NULL)
+        {
+            if(p101_strchr(env, discard, '\n') != NULL)
+            {
+                break;
+            }
+        }
+    }
+
+    return complete;
+}
+
 void p101_report_read_resources(const struct p101_env *env, struct p101_error *err, const char *path, struct report_model *model)
 {
     FILE *stream;
@@ -20,6 +47,12 @@ void p101_report_read_resources(const struct p101_env *env, struct p101_error *e
     {
         struct resource_event event;
         enum line_status      status;
+
+        if(!p101_report_line_is_complete(env, err, stream, line))
+        {
+            model->resource_malformed++;
+            continue;
+        }
 
         p101_memset(env, &event, 0, sizeof(event));
         status = p101_report_parse_resource_line(env, err, line, &event, model, model->resource_records + 1U);
@@ -80,6 +113,12 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
     {
         struct call_event event;
         enum line_status  status;
+
+        if(!p101_report_line_is_complete(env, err, stream, line))
+        {
+            model->call_malformed++;
+            continue;
+        }
 
         p101_memset(env, &event, 0, sizeof(event));
         status = p101_report_parse_call_line(env, err, line, &event, model->call_records + 1U);
