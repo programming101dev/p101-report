@@ -6,6 +6,10 @@
 #include <p101_c/p101_string.h>
 #include <stdlib.h>
 
+static bool p101_report_parse_optional_size_field(const struct p101_env *env, const char *text);
+static bool p101_report_parse_supported_version(const char *version_text, long *version, enum line_status *status);
+static bool p101_report_skip_v2_metadata(const struct p101_env *env, char **cursor, long version);
+
 enum line_status p101_report_parse_resource_line(const struct p101_env *env, struct p101_error *err, char *line, struct resource_event *event, struct report_model *model, size_t sequence)
 {
     enum line_status status;
@@ -43,22 +47,25 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
     cursor       = line;
     magic        = p101_report_split_tab(&cursor);
     version_text = p101_report_split_tab(&cursor);
-    pid_text     = p101_report_split_tab(&cursor);
-    kind_text    = p101_report_split_tab(&cursor);
 
-    if(!p101_report_parse_long_field(version_text, LOG_VERSION, LOG_VERSION, &version))
+    if(!p101_report_parse_supported_version(version_text, &version, &status))
     {
-        if(p101_report_parse_long_field(version_text, LONG_MIN, LONG_MAX, &version))
-        {
-            status = LINE_BAD_VERSION;
-        }
         goto done;
     }
+
+    pid_text = p101_report_split_tab(&cursor);
 
     if(!p101_report_parse_long_field(pid_text, LONG_MIN, LONG_MAX, &pid))
     {
         goto done;
     }
+
+    if(!p101_report_skip_v2_metadata(env, &cursor, version))
+    {
+        goto done;
+    }
+
+    kind_text = p101_report_split_tab(&cursor);
 
     if(p101_strcmp(env, magic, "P101FORK") == 0)
     {
@@ -237,10 +244,27 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
         goto done;
     }
 
-    cursor        = line;
-    magic         = p101_report_split_tab(&cursor);
-    version_text  = p101_report_split_tab(&cursor);
-    pid_text      = p101_report_split_tab(&cursor);
+    cursor       = line;
+    magic        = p101_report_split_tab(&cursor);
+    version_text = p101_report_split_tab(&cursor);
+
+    if(!p101_report_parse_supported_version(version_text, &version, &status))
+    {
+        goto done;
+    }
+
+    pid_text = p101_report_split_tab(&cursor);
+
+    if(!p101_report_parse_long_field(pid_text, LONG_MIN, LONG_MAX, &pid))
+    {
+        goto done;
+    }
+
+    if(!p101_report_skip_v2_metadata(env, &cursor, version))
+    {
+        goto done;
+    }
+
     kind_text     = p101_report_split_tab(&cursor);
     line_text     = p101_report_split_tab(&cursor);
     function_name = p101_report_split_tab(&cursor);
@@ -254,16 +278,7 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
         goto done;
     }
 
-    if(!p101_report_parse_long_field(version_text, LOG_VERSION, LOG_VERSION, &version))
-    {
-        if(p101_report_parse_long_field(version_text, LONG_MIN, LONG_MAX, &version))
-        {
-            status = LINE_BAD_VERSION;
-        }
-        goto done;
-    }
-
-    if(!p101_report_parse_long_field(pid_text, LONG_MIN, LONG_MAX, &pid) || !p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
+    if(!p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
     {
         goto done;
     }
@@ -296,4 +311,76 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
 
 done:
     return status;
+}
+
+static bool p101_report_parse_optional_size_field(const struct p101_env *env, const char *text)
+{
+    size_t ignored;
+
+    if(text == NULL || text[0] == '\0')
+    {
+        return false;
+    }
+
+    if(p101_strcmp(env, text, "-") == 0)
+    {
+        return true;
+    }
+
+    return p101_report_parse_size_field(text, &ignored);
+}
+
+static bool p101_report_parse_supported_version(const char *version_text, long *version, enum line_status *status)
+{
+    bool result;
+
+    result = false;
+
+    if(!p101_report_parse_long_field(version_text, LONG_MIN, LONG_MAX, version))
+    {
+        goto done;
+    }
+
+    if(*version < LOG_VERSION_MIN || *version > LOG_VERSION_MAX)
+    {
+        *status = LINE_BAD_VERSION;
+        goto done;
+    }
+
+    result = true;
+
+done:
+    return result;
+}
+
+static bool p101_report_skip_v2_metadata(const struct p101_env *env, char **cursor, long version)
+{
+    const char *sequence_text;
+    const char *monotonic_text;
+    const char *wall_text;
+    if(version == LOG_VERSION_MIN)
+    {
+        return true;
+    }
+
+    sequence_text  = p101_report_split_tab(cursor);
+    monotonic_text = p101_report_split_tab(cursor);
+    wall_text      = p101_report_split_tab(cursor);
+
+    if(!p101_report_parse_optional_size_field(env, sequence_text))
+    {
+        return false;
+    }
+
+    if(!p101_report_parse_optional_size_field(env, monotonic_text))
+    {
+        return false;
+    }
+
+    if(!p101_report_parse_optional_size_field(env, wall_text))
+    {
+        return false;
+    }
+
+    return true;
 }

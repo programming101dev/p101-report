@@ -9,7 +9,8 @@
 
 enum
 {
-    LOG_VERSION          = 1,
+    LOG_VERSION_MIN      = 1,
+    LOG_VERSION_MAX      = 2,
     LINE_MAX_BYTES       = 4096,
     PATH_MAX_BYTES       = 4096,
     MSG_LEN              = 256,
