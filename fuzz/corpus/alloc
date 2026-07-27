@@ -1,1 +1,1 @@
-P101ALLOC	1	42	ALLOC	0x1234	-	128	22	make_buffer	buffer.c
+P101ALLOC	2	42	1	101	201	ALLOC	0x1234	-	128	22	make_buffer	buffer.c

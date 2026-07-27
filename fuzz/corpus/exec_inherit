@@ -1,2 +1,2 @@
-P101FD	1	100	OPEN	3	26	main	main.c
-P101EXEC	1	100	3	0	40	p101_execvp	unistd.c	/bin/echo
+P101FD	2	100	1	101	201	OPEN	3	26	main	main.c
+P101EXEC	2	100	2	102	202	3	0	40	p101_execvp	unistd.c	/bin/echo

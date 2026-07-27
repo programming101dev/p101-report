@@ -1,16 +1,8 @@
 #ifndef P101_REPORT_CONSTANTS_H
 #define P101_REPORT_CONSTANTS_H
 
-#define FD_PREFIX "P101FD\t"
-#define ALLOC_PREFIX "P101ALLOC\t"
-#define FORK_PREFIX "P101FORK\t"
-#define EXEC_PREFIX "P101EXEC\t"
-#define CALL_PREFIX "P101CALL\t"
-
 enum
 {
-    LOG_VERSION_MIN      = 1,
-    LOG_VERSION_MAX      = 2,
     LINE_MAX_BYTES       = 4096,
     PATH_MAX_BYTES       = 4096,
     MSG_LEN              = 256,

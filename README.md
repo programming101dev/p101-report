@@ -58,7 +58,8 @@ Findings include stable diagnostic IDs such as `P101-FD-001` and
 
 JSON output includes `event_schema` and `event_id_policy`. The event IDs shown
 in reports are derived from the 1-based parsed-record sequence in each input
-stream. The canonical v1 log contract is documented by `p101-observe` in
+stream, while lifetime durations use the v2 monotonic timestamps emitted by
+`lib_env`. The canonical log contract is documented by `p101-observe` in
 `../p101-observe/docs/event-format.md`.
 
 The goal is not to replace the lower-level tools. `p101-resource-tracker` remains
@@ -68,10 +69,9 @@ the strict analyzer, and `p101-trace` remains the dedicated call-log renderer.
 ## Boundaries
 
 `p101-report` only knows what is present in `resources.log` and `calls.log`.
-Missing wrapper events, direct non-p101 calls, third-party behavior, and schema
-features not represented in the v1 logs are outside its model. The correlated
-story is replayable evidence from those logs, not proof about unobserved
-executions.
+Missing wrapper events, direct non-p101 calls, third-party behavior, and
+unsupported event schemas are outside its model. The correlated story is
+replayable evidence from those logs, not proof about unobserved executions.
 
 ## Exit status
 

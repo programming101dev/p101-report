@@ -116,7 +116,7 @@ static void test_parse_rejects_missing_call_log(void)
 
 static void test_parse_resource_line_accepts_fd_open(void)
 {
-    char                  line[] = "P101FD\t1\t42\tOPEN\t3\t17\tmain\tserver.c\n";
+    char                  line[] = "P101FD\t2\t42\t1\t100\t200\tOPEN\t3\t17\tmain\tserver.c\n";
     struct report_model   model;
     struct resource_event event;
     enum line_status      status;
@@ -130,6 +130,9 @@ static void test_parse_resource_line_accepts_fd_open(void)
     TEST_ASSERT_EQUAL_INT64(42, event.pid);
     TEST_ASSERT_EQUAL_INT(RESOURCE_FD_OPEN, event.kind);
     TEST_ASSERT_EQUAL_INT(3, event.fd);
+    TEST_ASSERT_EQUAL_UINT(1, event.event_sequence);
+    TEST_ASSERT_EQUAL_UINT(100, event.monotonic_ns);
+    TEST_ASSERT_EQUAL_UINT(200, event.wall_unix_ns);
     TEST_ASSERT_EQUAL_STRING("server.c", model.sites[event.site].file_name);
     TEST_ASSERT_EQUAL_STRING("main", model.sites[event.site].function_name);
     TEST_ASSERT_EQUAL_INT(17, model.sites[event.site].line_number);
@@ -162,7 +165,7 @@ static void test_parse_resource_line_accepts_v2_fd_open(void)
 
 static void test_parse_call_line_accepts_exit(void)
 {
-    char              line[] = "P101CALL\t1\t42\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
+    char              line[] = "P101CALL\t2\t42\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
     struct call_event event;
     enum line_status  status;
 
@@ -173,6 +176,9 @@ static void test_parse_call_line_accepts_exit(void)
     TEST_ASSERT_EQUAL_INT(LINE_OK, status);
     TEST_ASSERT_EQUAL_INT64(42, event.pid);
     TEST_ASSERT_EQUAL_INT(CALL_EXIT, event.kind);
+    TEST_ASSERT_EQUAL_UINT(1, event.event_sequence);
+    TEST_ASSERT_EQUAL_UINT(100, event.monotonic_ns);
+    TEST_ASSERT_EQUAL_UINT(200, event.wall_unix_ns);
     TEST_ASSERT_EQUAL_STRING("p101_open", event.call_name);
     TEST_ASSERT_EQUAL_STRING("3", event.result);
 

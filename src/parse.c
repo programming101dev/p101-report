@@ -1,212 +1,102 @@
 #include "parse.h"
-#include "constants.h"
 #include "model.h"
-#include "text.h"
-#include <limits.h>
 #include <p101_c/p101_string.h>
-#include <stdlib.h>
 
-static bool p101_report_parse_optional_size_field(const struct p101_env *env, const char *text);
-static bool p101_report_parse_supported_version(const char *version_text, long *version, enum line_status *status);
-static bool p101_report_skip_v2_metadata(const struct p101_env *env, char **cursor, long version);
+static enum line_status map_parse_status(p101_env_event_parse_status status);
+static void             copy_resource_metadata(const struct p101_env_event_record *record, struct resource_event *event, size_t sequence);
+static void             copy_call_metadata(const struct p101_env_event_record *record, struct call_event *event, size_t sequence);
+static enum line_status unknown_parse_status(void);
 
 enum line_status p101_report_parse_resource_line(const struct p101_env *env, struct p101_error *err, char *line, struct resource_event *event, struct report_model *model, size_t sequence)
 {
-    enum line_status status;
-    char            *cursor;
-    const char      *magic;
-    const char      *version_text;
-    const char      *pid_text;
-    const char      *kind_text;
-    const char      *primary_text;
-    const char      *new_ptr_text;
-    const char      *size_text;
-    const char      *line_text;
-    const char      *function_name;
-    const char      *file_name;
-    long             version;
-    long             pid;
-    long             child_pid;
-    long             fd_or_line;
-    long             line_number;
-    size_t           size;
+    enum line_status             status;
+    p101_env_event_parse_status  parse_status;
+    struct p101_env_event_record record;
 
     status = LINE_MALFORMED;
 
-    if(!p101_report_strip_line(env, line))
+    if(line == NULL || event == NULL || model == NULL)
     {
         goto done;
     }
 
-    if(!p101_report_line_has_prefix(env, line, FD_PREFIX) && !p101_report_line_has_prefix(env, line, ALLOC_PREFIX) && !p101_report_line_has_prefix(env, line, FORK_PREFIX) && !p101_report_line_has_prefix(env, line, EXEC_PREFIX))
-    {
-        status = LINE_OTHER;
-        goto done;
-    }
+    parse_status = p101_env_parse_event_line(line, &record);
+    status       = map_parse_status(parse_status);
 
-    cursor       = line;
-    magic        = p101_report_split_tab(&cursor);
-    version_text = p101_report_split_tab(&cursor);
-
-    if(!p101_report_parse_supported_version(version_text, &version, &status))
+    if(status != LINE_OK)
     {
         goto done;
     }
 
-    pid_text = p101_report_split_tab(&cursor);
+    copy_resource_metadata(&record, event, sequence);
 
-    if(!p101_report_parse_long_field(pid_text, LONG_MIN, LONG_MAX, &pid))
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
+    switch(record.record_kind)
     {
-        goto done;
-    }
-
-    if(!p101_report_skip_v2_metadata(env, &cursor, version))
-    {
-        goto done;
-    }
-
-    kind_text = p101_report_split_tab(&cursor);
-
-    if(p101_strcmp(env, magic, "P101FORK") == 0)
-    {
-        line_text     = p101_report_split_tab(&cursor);
-        function_name = p101_report_split_tab(&cursor);
-        file_name     = p101_report_split_tab(&cursor);
-
-        if(cursor != NULL || kind_text == NULL || line_text == NULL || function_name == NULL || file_name == NULL)
+        case P101_ENV_EVENT_RECORD_FD:
         {
-            goto done;
+            event->kind = (record.fd_kind == P101_ENV_EVENT_FD_OPEN) ? RESOURCE_FD_OPEN : RESOURCE_FD_CLOSE;
+            event->fd   = record.fd;
+            event->site = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            break;
         }
-
-        if(!p101_report_parse_long_field(kind_text, LONG_MIN, LONG_MAX, &child_pid) || !p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
+        case P101_ENV_EVENT_RECORD_ALLOC:
         {
-            goto done;
+            if(record.alloc_kind == P101_ENV_EVENT_ALLOC_ALLOC)
+            {
+                event->kind = RESOURCE_ALLOC;
+            }
+            else if(record.alloc_kind == P101_ENV_EVENT_ALLOC_FREE)
+            {
+                event->kind = RESOURCE_FREE;
+            }
+            else
+            {
+                event->kind = RESOURCE_REALLOC;
+            }
+            event->ptr     = p101_report_dup_text(env, err, record.ptr);
+            event->new_ptr = p101_report_dup_text(env, err, record.new_ptr == NULL ? "-" : record.new_ptr);
+            event->size    = record.size;
+            event->site    = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            break;
         }
-
-        event->kind      = RESOURCE_FORK;
-        event->pid       = pid;
-        event->child_pid = child_pid;
-        event->site      = p101_report_intern_site(env, err, model, file_name, function_name, (int)line_number);
-        event->sequence  = sequence;
-        status           = LINE_OK;
-    }
-    else if(p101_strcmp(env, magic, "P101EXEC") == 0)
-    {
-        const char *cloexec_text;
-        const char *target_text;
-        long        cloexec;
-
-        primary_text  = kind_text;
-        cloexec_text  = p101_report_split_tab(&cursor);
-        line_text     = p101_report_split_tab(&cursor);
-        function_name = p101_report_split_tab(&cursor);
-        file_name     = p101_report_split_tab(&cursor);
-        target_text   = p101_report_split_tab(&cursor);
-
-        if(cursor != NULL || primary_text == NULL || cloexec_text == NULL || line_text == NULL || function_name == NULL || file_name == NULL || target_text == NULL)
+        case P101_ENV_EVENT_RECORD_FORK:
         {
-            goto done;
+            event->kind      = RESOURCE_FORK;
+            event->child_pid = record.child_pid;
+            event->site      = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            break;
         }
-
-        if(!p101_report_parse_long_field(primary_text, INT_MIN, INT_MAX, &fd_or_line) || !p101_report_parse_long_field(cloexec_text, 0, 1, &cloexec) || !p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
+        case P101_ENV_EVENT_RECORD_EXEC:
         {
-            goto done;
+            event->kind    = RESOURCE_EXEC;
+            event->fd      = record.fd;
+            event->cloexec = record.cloexec;
+            event->target  = p101_report_dup_text(env, err, record.target);
+            event->site    = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            break;
         }
-
-        event->kind     = RESOURCE_EXEC;
-        event->pid      = pid;
-        event->fd       = (int)fd_or_line;
-        event->cloexec  = (int)cloexec;
-        event->target   = p101_report_dup_text(env, err, target_text);
-        event->site     = p101_report_intern_site(env, err, model, file_name, function_name, (int)line_number);
-        event->sequence = sequence;
-        if(p101_error_has_no_error(err))
+        case P101_ENV_EVENT_RECORD_CALL:
         {
-            status = LINE_OK;
+            status = LINE_OTHER;
+            break;
+        }
+        default:
+        {
+            status = LINE_MALFORMED;
+            break;
         }
     }
-    else if(p101_strcmp(env, magic, "P101FD") == 0)
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
+
+    if(status == LINE_OK && p101_error_has_error(err))
     {
-        primary_text  = p101_report_split_tab(&cursor);
-        line_text     = p101_report_split_tab(&cursor);
-        function_name = p101_report_split_tab(&cursor);
-        file_name     = p101_report_split_tab(&cursor);
-
-        if(cursor != NULL || primary_text == NULL || line_text == NULL || function_name == NULL || file_name == NULL)
-        {
-            goto done;
-        }
-
-        if(!p101_report_parse_long_field(primary_text, INT_MIN, INT_MAX, &fd_or_line) || !p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
-        {
-            goto done;
-        }
-
-        if(p101_strcmp(env, kind_text, "OPEN") == 0)
-        {
-            event->kind = RESOURCE_FD_OPEN;
-        }
-        else if(p101_strcmp(env, kind_text, "CLOSE") == 0)
-        {
-            event->kind = RESOURCE_FD_CLOSE;
-        }
-        else
-        {
-            goto done;
-        }
-
-        event->pid      = pid;
-        event->fd       = (int)fd_or_line;
-        event->site     = p101_report_intern_site(env, err, model, file_name, function_name, (int)line_number);
-        event->sequence = sequence;
-        status          = LINE_OK;
-    }
-    else
-    {
-        primary_text  = p101_report_split_tab(&cursor);
-        new_ptr_text  = p101_report_split_tab(&cursor);
-        size_text     = p101_report_split_tab(&cursor);
-        line_text     = p101_report_split_tab(&cursor);
-        function_name = p101_report_split_tab(&cursor);
-        file_name     = p101_report_split_tab(&cursor);
-
-        if(cursor != NULL || primary_text == NULL || new_ptr_text == NULL || size_text == NULL || line_text == NULL || function_name == NULL || file_name == NULL)
-        {
-            goto done;
-        }
-
-        if(!p101_report_parse_size_field(size_text, &size) || !p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
-        {
-            goto done;
-        }
-
-        if(p101_strcmp(env, kind_text, "ALLOC") == 0)
-        {
-            event->kind = RESOURCE_ALLOC;
-        }
-        else if(p101_strcmp(env, kind_text, "FREE") == 0)
-        {
-            event->kind = RESOURCE_FREE;
-        }
-        else if(p101_strcmp(env, kind_text, "REALLOC") == 0)
-        {
-            event->kind = RESOURCE_REALLOC;
-        }
-        else
-        {
-            goto done;
-        }
-
-        event->pid      = pid;
-        event->ptr      = p101_report_dup_text(env, err, primary_text);
-        event->new_ptr  = p101_report_dup_text(env, err, new_ptr_text);
-        event->size     = size;
-        event->site     = p101_report_intern_site(env, err, model, file_name, function_name, (int)line_number);
-        event->sequence = sequence;
-        if(p101_error_has_no_error(err))
-        {
-            status = LINE_OK;
-        }
+        status = LINE_MALFORMED;
     }
 
 done:
@@ -215,172 +105,116 @@ done:
 
 enum line_status p101_report_parse_call_line(const struct p101_env *env, struct p101_error *err, char *line, struct call_event *event, size_t sequence)
 {
-    enum line_status status;
-    char            *cursor;
-    const char      *magic;
-    const char      *version_text;
-    const char      *pid_text;
-    const char      *kind_text;
-    const char      *line_text;
-    const char      *function_name;
-    const char      *call_name;
-    const char      *arguments;
-    const char      *result;
-    const char      *file_name;
-    long             version;
-    long             pid;
-    long             line_number;
+    enum line_status             status;
+    p101_env_event_parse_status  parse_status;
+    struct p101_env_event_record record;
 
     status = LINE_MALFORMED;
 
-    if(!p101_report_strip_line(env, line))
+    if(line == NULL || event == NULL)
     {
         goto done;
     }
 
-    if(!p101_report_line_has_prefix(env, line, CALL_PREFIX))
+    parse_status = p101_env_parse_event_line(line, &record);
+    status       = map_parse_status(parse_status);
+
+    if(status != LINE_OK)
+    {
+        goto done;
+    }
+
+    if(record.record_kind != P101_ENV_EVENT_RECORD_CALL)
     {
         status = LINE_OTHER;
         goto done;
     }
 
-    cursor       = line;
-    magic        = p101_report_split_tab(&cursor);
-    version_text = p101_report_split_tab(&cursor);
+    copy_call_metadata(&record, event, sequence);
+    event->kind          = (record.call_kind == P101_ENV_EVENT_CALL_ENTER) ? CALL_ENTER : CALL_EXIT;
+    event->line_number   = record.line_number;
+    event->function_name = p101_report_dup_text(env, err, record.function_name);
+    event->call_name     = p101_report_dup_text(env, err, record.call_name);
+    event->arguments     = p101_report_dup_text(env, err, record.arguments);
+    event->result        = p101_report_dup_text(env, err, record.result);
+    event->file_name     = p101_report_dup_text(env, err, record.file_name);
 
-    if(!p101_report_parse_supported_version(version_text, &version, &status))
+    if(p101_error_has_error(err))
     {
-        goto done;
-    }
-
-    pid_text = p101_report_split_tab(&cursor);
-
-    if(!p101_report_parse_long_field(pid_text, LONG_MIN, LONG_MAX, &pid))
-    {
-        goto done;
-    }
-
-    if(!p101_report_skip_v2_metadata(env, &cursor, version))
-    {
-        goto done;
-    }
-
-    kind_text     = p101_report_split_tab(&cursor);
-    line_text     = p101_report_split_tab(&cursor);
-    function_name = p101_report_split_tab(&cursor);
-    call_name     = p101_report_split_tab(&cursor);
-    arguments     = p101_report_split_tab(&cursor);
-    result        = p101_report_split_tab(&cursor);
-    file_name     = p101_report_split_tab(&cursor);
-
-    if(cursor != NULL || magic == NULL || version_text == NULL || pid_text == NULL || kind_text == NULL || line_text == NULL || function_name == NULL || call_name == NULL || arguments == NULL || result == NULL || file_name == NULL)
-    {
-        goto done;
-    }
-
-    if(!p101_report_parse_long_field(line_text, INT_MIN, INT_MAX, &line_number))
-    {
-        goto done;
-    }
-
-    if(p101_strcmp(env, kind_text, "ENTER") == 0)
-    {
-        event->kind = CALL_ENTER;
-    }
-    else if(p101_strcmp(env, kind_text, "EXIT") == 0)
-    {
-        event->kind = CALL_EXIT;
-    }
-    else
-    {
-        goto done;
-    }
-
-    event->pid           = pid;
-    event->line_number   = (int)line_number;
-    event->function_name = p101_report_dup_text(env, err, function_name);
-    event->call_name     = p101_report_dup_text(env, err, call_name);
-    event->arguments     = p101_report_dup_text(env, err, arguments);
-    event->result        = p101_report_dup_text(env, err, result);
-    event->file_name     = p101_report_dup_text(env, err, file_name);
-    event->sequence      = sequence;
-    if(p101_error_has_no_error(err))
-    {
-        status = LINE_OK;
+        status = LINE_MALFORMED;
     }
 
 done:
     return status;
 }
 
-static bool p101_report_parse_optional_size_field(const struct p101_env *env, const char *text)
+static enum line_status map_parse_status(p101_env_event_parse_status status)
 {
-    size_t ignored;
+    enum line_status mapped;
 
-    if(text == NULL || text[0] == '\0')
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
+    switch(status)
     {
-        return false;
+        case P101_ENV_EVENT_PARSE_OTHER:
+        {
+            mapped = LINE_OTHER;
+            break;
+        }
+        case P101_ENV_EVENT_PARSE_OK:
+        {
+            mapped = LINE_OK;
+            break;
+        }
+        case P101_ENV_EVENT_PARSE_BAD_VERSION:
+        {
+            mapped = LINE_BAD_VERSION;
+            break;
+        }
+        case P101_ENV_EVENT_PARSE_MALFORMED:
+        {
+            mapped = LINE_MALFORMED;
+            break;
+        }
+        default:
+        {
+            mapped = unknown_parse_status();
+            break;
+        }
     }
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 
-    if(p101_strcmp(env, text, "-") == 0)
-    {
-        return true;
-    }
-
-    return p101_report_parse_size_field(text, &ignored);
+    return mapped;
 }
 
-static bool p101_report_parse_supported_version(const char *version_text, long *version, enum line_status *status)
+static enum line_status unknown_parse_status(void)
 {
-    bool result;
-
-    result = false;
-
-    if(!p101_report_parse_long_field(version_text, LONG_MIN, LONG_MAX, version))
-    {
-        goto done;
-    }
-
-    if(*version < LOG_VERSION_MIN || *version > LOG_VERSION_MAX)
-    {
-        *status = LINE_BAD_VERSION;
-        goto done;
-    }
-
-    result = true;
-
-done:
-    return result;
+    return LINE_MALFORMED;
 }
 
-static bool p101_report_skip_v2_metadata(const struct p101_env *env, char **cursor, long version)
+static void copy_resource_metadata(const struct p101_env_event_record *record, struct resource_event *event, size_t sequence)
 {
-    const char *sequence_text;
-    const char *monotonic_text;
-    const char *wall_text;
-    if(version == LOG_VERSION_MIN)
-    {
-        return true;
-    }
+    event->pid                    = record->pid;
+    event->child_pid              = -1;
+    event->sequence               = sequence;
+    event->event_sequence         = record->sequence;
+    event->monotonic_ns           = record->monotonic_ns;
+    event->wall_unix_ns           = record->wall_unix_ns;
+    event->monotonic_ns_available = record->monotonic_ns_available;
+    event->wall_unix_ns_available = record->wall_unix_ns_available;
+}
 
-    sequence_text  = p101_report_split_tab(cursor);
-    monotonic_text = p101_report_split_tab(cursor);
-    wall_text      = p101_report_split_tab(cursor);
-
-    if(!p101_report_parse_optional_size_field(env, sequence_text))
-    {
-        return false;
-    }
-
-    if(!p101_report_parse_optional_size_field(env, monotonic_text))
-    {
-        return false;
-    }
-
-    if(!p101_report_parse_optional_size_field(env, wall_text))
-    {
-        return false;
-    }
-
-    return true;
+static void copy_call_metadata(const struct p101_env_event_record *record, struct call_event *event, size_t sequence)
+{
+    event->pid                    = record->pid;
+    event->sequence               = sequence;
+    event->event_sequence         = record->sequence;
+    event->monotonic_ns           = record->monotonic_ns;
+    event->wall_unix_ns           = record->wall_unix_ns;
+    event->monotonic_ns_available = record->monotonic_ns_available;
+    event->wall_unix_ns_available = record->wall_unix_ns_available;
 }

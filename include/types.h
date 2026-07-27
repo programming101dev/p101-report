@@ -60,6 +60,11 @@ struct resource_event
     size_t             size;
     size_t             site;
     size_t             sequence;
+    size_t             event_sequence;
+    size_t             monotonic_ns;
+    size_t             wall_unix_ns;
+    int                monotonic_ns_available;
+    int                wall_unix_ns_available;
 };
 
 struct call_event
@@ -73,6 +78,11 @@ struct call_event
     char          *result;
     char          *file_name;
     size_t         sequence;
+    size_t         event_sequence;
+    size_t         monotonic_ns;
+    size_t         wall_unix_ns;
+    int            monotonic_ns_available;
+    int            wall_unix_ns_available;
 };
 
 struct live_fd
