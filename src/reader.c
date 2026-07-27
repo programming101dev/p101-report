@@ -7,31 +7,72 @@
 #include <p101_c/p101_string.h>
 #include <stdio.h>
 
-static bool p101_report_line_is_complete(const struct p101_env *env, struct p101_error *err, FILE *stream, char *line);
-
-static bool p101_report_line_is_complete(const struct p101_env *env, struct p101_error *err, FILE *stream, char *line)
+enum input_line_status
 {
-    bool   complete;
+    INPUT_LINE_EOF = 0,
+    INPUT_LINE_OK,
+    INPUT_LINE_MALFORMED
+};
+
+static enum input_line_status p101_report_read_line(const struct p101_env *env, struct p101_error *err, FILE *stream, char *line, size_t line_size);
+
+static enum input_line_status p101_report_read_line(const struct p101_env *env, struct p101_error *err, FILE *stream, char *line, size_t line_size)
+{
+    bool   saw_byte;
+    bool   malformed;
     size_t length;
 
-    complete = true;
-    length   = p101_strlen(env, line);
+    saw_byte  = false;
+    malformed = false;
+    length    = 0U;
 
-    if(length == LINE_MAX_BYTES - 1U && p101_strchr(env, line, '\n') == NULL)
+    while(p101_error_has_no_error(err))
     {
-        char discard[LINE_MAX_BYTES];
+        int ch;
 
-        complete = false;
-        while(p101_error_has_no_error(err) && p101_fgets(env, err, discard, sizeof(discard), stream) != NULL)
+        ch = p101_fgetc(env, err, stream);
+
+        if(ch == EOF)
         {
-            if(p101_strchr(env, discard, '\n') != NULL)
-            {
-                break;
-            }
+            break;
+        }
+
+        saw_byte = true;
+
+        if(ch == '\0')
+        {
+            malformed = true;
+        }
+
+        if(length + 1U < line_size)
+        {
+            line[length] = (char)ch;
+            length++;
+        }
+        else
+        {
+            malformed = true;
+        }
+
+        if(ch == '\n')
+        {
+            break;
         }
     }
 
-    return complete;
+    if(!saw_byte)
+    {
+        return INPUT_LINE_EOF;
+    }
+
+    line[(length < line_size) ? length : (line_size - 1U)] = '\0';
+
+    if(malformed)
+    {
+        return INPUT_LINE_MALFORMED;
+    }
+
+    return INPUT_LINE_OK;
 }
 
 void p101_report_read_resources(const struct p101_env *env, struct p101_error *err, const char *path, struct report_model *model)
@@ -43,12 +84,20 @@ void p101_report_read_resources(const struct p101_env *env, struct p101_error *e
     P101_TRACE(env);
     stream = p101_report_open_input(env, err, path, &owned);
 
-    while(p101_error_has_no_error(err) && p101_fgets(env, err, line, sizeof(line), stream) != NULL)
+    while(p101_error_has_no_error(err))
     {
-        struct resource_event event;
-        enum line_status      status;
+        struct resource_event  event;
+        enum line_status       status;
+        enum input_line_status line_status;
 
-        if(!p101_report_line_is_complete(env, err, stream, line))
+        line_status = p101_report_read_line(env, err, stream, line, sizeof(line));
+
+        if(line_status == INPUT_LINE_EOF)
+        {
+            break;
+        }
+
+        if(line_status == INPUT_LINE_MALFORMED)
         {
             model->resource_malformed++;
             continue;
@@ -109,12 +158,20 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
     P101_TRACE(env);
     stream = p101_report_open_input(env, err, path, &owned);
 
-    while(p101_error_has_no_error(err) && p101_fgets(env, err, line, sizeof(line), stream) != NULL)
+    while(p101_error_has_no_error(err))
     {
-        struct call_event event;
-        enum line_status  status;
+        struct call_event      event;
+        enum line_status       status;
+        enum input_line_status line_status;
 
-        if(!p101_report_line_is_complete(env, err, stream, line))
+        line_status = p101_report_read_line(env, err, stream, line, sizeof(line));
+
+        if(line_status == INPUT_LINE_EOF)
+        {
+            break;
+        }
+
+        if(line_status == INPUT_LINE_MALFORMED)
         {
             model->call_malformed++;
             continue;

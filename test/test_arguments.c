@@ -3,13 +3,18 @@
 #include "errors.h"
 #include "model.h"
 #include "parse.h"
+#include "reader.h"
 #include "types.h"
 #include "unity.h"
+#include <p101_c/p101_stdio.h>
 #include <p101_c/p101_string.h>
 #include <p101_env/env.h>
 #include <p101_error/error.h>
+#include <p101_posix/p101_stdio.h>
+#include <p101_posix/p101_stdlib.h>
 #include <p101_posix/p101_unistd.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 static struct p101_error *error;
 static struct p101_env   *env;
@@ -152,6 +157,48 @@ static void test_parse_call_line_accepts_exit(void)
     p101_report_free_call_event(env, &event);
 }
 
+static void write_temp_bytes(char *path, size_t path_size, const char *bytes, size_t byte_count)
+{
+    FILE *stream;
+    int   fd;
+
+    p101_strncpy(env, path, "/tmp/p101-report-test-XXXXXX", path_size);
+    path[path_size - 1U] = '\0';
+
+    fd = p101_mkstemp(env, error, path);
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+    TEST_ASSERT_NOT_EQUAL(-1, fd);
+
+    stream = p101_fdopen(env, error, fd, "wb");
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+    TEST_ASSERT_NOT_NULL(stream);
+
+    TEST_ASSERT_EQUAL_UINT(byte_count, p101_fwrite(env, error, bytes, 1U, byte_count, stream));
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+
+    p101_fclose(env, error, stream);
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+}
+
+static void test_resource_reader_counts_embedded_nul_as_malformed(void)
+{
+    static const char      bytes[] = {'P', '1', '0', '1', 'F', 'D', '\t', '1', '\t', '4', '2', '\0', '\t', 'O', 'P', 'E', 'N', '\t', '3', '\t', '1', '7', '\t', 'm', 'a', 'i', 'n', '\t', 's', 'e', 'r', 'v', 'e', 'r', '.', 'c', '\n'};
+    char                   path[PATH_MAX_BYTES];
+    struct report_model    model;
+
+    p101_memset(env, &model, 0, sizeof(model));
+    write_temp_bytes(path, sizeof(path), bytes, sizeof(bytes));
+
+    p101_report_read_resources(env, error, path, &model);
+
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+    TEST_ASSERT_EQUAL_UINT64(0, model.resource_records);
+    TEST_ASSERT_EQUAL_UINT64(1, model.resource_malformed);
+
+    p101_unlink(env, error, path);
+    p101_report_free_model(env, &model);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -161,5 +208,6 @@ int main(void)
     RUN_TEST(test_parse_rejects_missing_call_log);
     RUN_TEST(test_parse_resource_line_accepts_fd_open);
     RUN_TEST(test_parse_call_line_accepts_exit);
+    RUN_TEST(test_resource_reader_counts_embedded_nul_as_malformed);
     return UNITY_END();
 }
