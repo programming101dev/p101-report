@@ -103,6 +103,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
             p101_memset(env, &resource_event, 0, sizeof(resource_event));
             p101_memset(env, &call_event, 0, sizeof(call_event));
+            p101_memcpy(env, buf, data, size);
+            buf[size] = '\0';
             (void)p101_report_parse_resource_line(env, err, buf, &resource_event, &model, 1U);
             p101_report_free_resource_event(env, &resource_event);
 
