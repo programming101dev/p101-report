@@ -6,6 +6,7 @@
 static void p101_report_add_finding(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct finding *finding);
 static void p101_report_add_resource_event(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event);
 static bool p101_report_grow_array(const struct p101_env *env, struct p101_error *err, void **items, size_t *capacity, size_t count, size_t item_size);
+static void p101_report_rollback_failed_exec(const struct p101_env *env, struct report_model *model, const struct resource_event *event);
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
 #include <p101_posix/p101_string.h>
@@ -242,6 +243,15 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
             }
             break;
         }
+        case RESOURCE_SPAWN:
+        {
+            /*
+             * The event is retained for the timeline, but opaque file actions
+             * prevent a portable reconstruction of the child's descriptor
+             * table. Do not invent fork-style inheritance.
+             */
+            break;
+        }
         case RESOURCE_EXEC:
         {
             if(event->cloexec == 0)
@@ -266,6 +276,11 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                     }
                 }
             }
+            break;
+        }
+        case RESOURCE_EXEC_FAIL:
+        {
+            p101_report_rollback_failed_exec(env, model, event);
             break;
         }
         default:
@@ -310,6 +325,59 @@ void p101_report_finalize_leaks(const struct p101_env *env, struct p101_error *e
         finding.sequence = model->allocs[index].sequence;
         p101_report_add_finding(env, err, model, &finding);
     }
+}
+
+static void p101_report_rollback_failed_exec(const struct p101_env *env, struct report_model *model, const struct resource_event *event)
+{
+    size_t first_sequence;
+    size_t read_index;
+    size_t write_index;
+
+    first_sequence = event->sequence;
+    if(model->resource_count == 0U)
+    {
+        return;
+    }
+
+    /*
+     * The exec wrapper writes one snapshot record per open descriptor followed
+     * immediately by EXECFAIL when the native exec call returns. Walk only
+     * that contiguous attempt, so an earlier successful exec of the same
+     * target remains a finding.
+     */
+    read_index = model->resource_count - 1U;
+    while(read_index > 0U)
+    {
+        const struct resource_event *candidate;
+
+        candidate = &model->resources[read_index - 1U];
+        if(candidate->kind != RESOURCE_EXEC || candidate->pid != event->pid || candidate->site != event->site || candidate->target == NULL || event->target == NULL || p101_strcmp(env, candidate->target, event->target) != 0)
+        {
+            break;
+        }
+        first_sequence = candidate->sequence;
+        read_index--;
+    }
+
+    write_index = 0;
+    for(read_index = 0; read_index < model->finding_count; read_index++)
+    {
+        struct finding *finding;
+
+        finding = &model->findings[read_index];
+        if(finding->kind == FINDING_EXEC_INHERIT && finding->pid == event->pid && finding->sequence >= first_sequence && finding->ptr != NULL && event->target != NULL && p101_strcmp(env, finding->ptr, event->target) == 0)
+        {
+            p101_free(env, finding->ptr);
+            continue;
+        }
+
+        if(write_index != read_index)
+        {
+            model->findings[write_index] = *finding;
+        }
+        write_index++;
+    }
+    model->finding_count = write_index;
 }
 
 size_t p101_report_intern_site(const struct p101_env *env, struct p101_error *err, struct report_model *model, const char *file_name, const char *function_name, int line_number)

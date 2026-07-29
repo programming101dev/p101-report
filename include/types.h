@@ -11,7 +11,9 @@ enum resource_kind
     RESOURCE_FREE,
     RESOURCE_REALLOC,
     RESOURCE_FORK,
-    RESOURCE_EXEC
+    RESOURCE_SPAWN,
+    RESOURCE_EXEC,
+    RESOURCE_EXEC_FAIL
 };
 
 enum call_kind

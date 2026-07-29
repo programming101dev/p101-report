@@ -9,6 +9,12 @@ turns them into one correlated story:
 It replays descriptor and allocation events, finds leaks and bad releases, then
 prints matching call records for the same pid/source site. It is the “what
 happened here?” layer above `p101-resource-tracker` and `p101-trace`.
+Failed exec attempts are rolled back when their `P101EXECFAIL` record arrives,
+so only descriptors crossing a successful image boundary are reported.
+Successful `posix_spawn` calls appear as `P101SPAWN` lifetime boundaries. The
+report retains their parent, child, target, timestamp, and source site, but does
+not invent a child descriptor table because portable spawn file actions are
+opaque.
 
 ## Usage
 

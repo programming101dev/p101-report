@@ -70,6 +70,14 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             event->site      = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
+        case P101_ENV_EVENT_RECORD_SPAWN:
+        {
+            event->kind      = RESOURCE_SPAWN;
+            event->child_pid = record.child_pid;
+            event->target    = p101_report_dup_text(env, err, record.target);
+            event->site      = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            break;
+        }
         case P101_ENV_EVENT_RECORD_EXEC:
         {
             event->kind    = RESOURCE_EXEC;
@@ -77,6 +85,13 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             event->cloexec = record.cloexec;
             event->target  = p101_report_dup_text(env, err, record.target);
             event->site    = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            break;
+        }
+        case P101_ENV_EVENT_RECORD_EXEC_FAIL:
+        {
+            event->kind   = RESOURCE_EXEC_FAIL;
+            event->target = p101_report_dup_text(env, err, record.target);
+            event->site   = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
         case P101_ENV_EVENT_RECORD_CALL:

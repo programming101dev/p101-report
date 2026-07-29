@@ -54,9 +54,19 @@ static const char *p101_report_resource_kind_name(enum resource_kind kind)
             name = "fork";
             break;
         }
+        case RESOURCE_SPAWN:
+        {
+            name = "spawn";
+            break;
+        }
         case RESOURCE_EXEC:
         {
             name = "exec";
+            break;
+        }
+        case RESOURCE_EXEC_FAIL:
+        {
+            name = "exec-fail";
             break;
         }
         default:
