@@ -295,12 +295,15 @@ static void p101_report_print_json_lifetime(const struct p101_env *env, struct p
     }
     else
     {
-        death = p101_report_find_generic_lifetime_end(env, model, birth);
+        const char *resource_id;
+
+        death       = p101_report_find_generic_lifetime_end(env, model, birth);
+        resource_id = p101_report_generic_birth_id(birth);
         p101_report_json_string(env, err, stdout, "generic");
         p101_fputs(env, err, ", \"resource_class\": ", stdout);
         p101_report_json_string(env, err, stdout, birth->resource_class == NULL ? "resource" : birth->resource_class);
         p101_fputs(env, err, ", \"resource_id\": ", stdout);
-        p101_report_json_string(env, err, stdout, p101_report_generic_birth_id(birth) == NULL ? "?" : p101_report_generic_birth_id(birth));
+        p101_report_json_string(env, err, stdout, resource_id == NULL ? "?" : resource_id);
         p101_printf(env, err, ", \"context_id\": %zu", birth->context_id);
     }
 
