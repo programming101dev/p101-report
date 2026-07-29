@@ -14,6 +14,11 @@ assignments, tests, and cohort summaries.
 | `P101-ALLOC-002` | double free | A pointer was freed more than once. |
 | `P101-ALLOC-003` | free of unknown pointer | A free was observed for a pointer not known to be live. |
 | `P101-ALLOC-004` | realloc of unknown pointer | A realloc was observed for a pointer not known to be live. |
+| `P101-RESOURCE-001` | leaked resource | A generic resource remained live at process end. |
+| `P101-RESOURCE-002` | double release | A generic resource was released more than once. |
+| `P101-RESOURCE-003` | release of unknown resource | A release was observed for a generic resource not known to be live. |
+| `P101-RESOURCE-004` | bad replace | A replace or transfer record omitted the new resource identity. |
+| `P101-RESOURCE-005` | duplicate acquire | A resource identity was acquired while an earlier acquisition was still live. |
 
 These IDs describe p101-observed behavior. If a program bypasses the wrappers,
 the p101 tools may not see the operation. Use `p101-wrapper-audit` as the gate

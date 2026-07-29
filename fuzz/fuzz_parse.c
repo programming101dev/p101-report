@@ -3,10 +3,12 @@
  */
 #include "cli.h"
 #include "constants.h"
+#include "memory.h"
 #include "model.h"
 #include "parse.h"
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
+#include <p101_tool_event/event.h>
 #include <setjmp.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -96,7 +98,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
             p101_report_check_arguments(env, err, &args, resources, sizeof(resources), calls, sizeof(calls));
         }
 
-        if(size < LINE_MAX_BYTES)
+        if(size < P101_TOOL_EVENT_LINE_MAX_BYTES)
         {
             struct resource_event resource_event;
             struct call_event     call_event;

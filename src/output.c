@@ -3,8 +3,12 @@
 #include "finding.h"
 #include "json.h"
 #include "lifetime.h"
+#include "lifetime_mermaid.h"
 #include <p101_c/p101_stdio.h>
+#include <stdbool.h>
 #include <stdio.h>
+
+static bool p101_report_finding_is_generic(enum finding_kind kind);
 
 void p101_report_print_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
 {
@@ -57,7 +61,7 @@ void p101_report_print_text_report(const struct p101_env *env, struct p101_error
 
     P101_TRACE(env);
     p101_printf(env, err, "p101-report\n");
-    p101_printf(env, err, "event schema: p101-event-format-v2\n");
+    p101_printf(env, err, "event schema: p101-tool-event-format-v3\n");
     p101_printf(env, err, "resource log: %s\n", args->resource_log);
     p101_printf(env, err, "call log:     %s\n\n", args->call_log);
 
@@ -86,8 +90,8 @@ done:
 
 void p101_report_print_json_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
 {
-    p101_fputs(env, err, "{\n", stdout);
-    p101_fputs(env, err, "  \"event_schema\": \"p101-event-format-v2\",\n", stdout);
+    p101_fputs(env, err, "{\n  \"schema\": \"p101-report-findings-v3\",\n", stdout);
+    p101_fputs(env, err, "  \"event_schema\": \"p101-tool-event-format-v3\",\n", stdout);
     p101_fputs(env, err, "  \"event_id_policy\": \"derived-1-based-input-sequence\",\n", stdout);
     p101_fputs(env, err, "  \"resource_log\": ", stdout);
     p101_report_json_string(env, err, stdout, args->resource_log);
@@ -133,7 +137,18 @@ void p101_report_print_finding(const struct p101_env *env, struct p101_error *er
     site = &model->sites[finding->site];
     p101_printf(env, err, "%zu. %s %s\n", ordinal, p101_report_finding_id(finding->kind), p101_report_finding_name(finding->kind));
 
-    if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE || finding->kind == FINDING_EXEC_INHERIT)
+    if(p101_report_finding_is_generic(finding->kind))
+    {
+        p101_printf(env,
+                    err,
+                    "   resource: %s %s, pid %ld, context %zu, resource event #%zu\n",
+                    finding->resource_class == NULL ? "resource" : finding->resource_class,
+                    finding->resource_id == NULL ? "?" : finding->resource_id,
+                    finding->pid,
+                    finding->context_id,
+                    finding->sequence);
+    }
+    else if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE || finding->kind == FINDING_EXEC_INHERIT)
     {
         p101_printf(env, err, "   resource: fd %d, pid %ld, resource event #%zu\n", finding->fd, finding->pid, finding->sequence);
         if(finding->kind == FINDING_EXEC_INHERIT)
@@ -196,11 +211,26 @@ void p101_report_print_json_finding(const struct p101_env *env, struct p101_erro
 
     p101_fputs(env, err, "    {\"id\": ", stdout);
     p101_report_json_string(env, err, stdout, p101_report_finding_id(finding->kind));
-    p101_fputs(env, err, ", \"kind\": ", stdout);
+    p101_fputs(env, err, ", \"severity\": \"error\", \"location\": {\"path\": ", stdout);
+    p101_report_json_string(env, err, stdout, site->file_name);
+    p101_printf(env, err, ", \"line\": %d, \"function\": ", site->line_number);
+    p101_report_json_string(env, err, stdout, site->function_name);
+    p101_fputs(env, err, "}, \"message\": ", stdout);
+    p101_report_json_string(env, err, stdout, p101_report_finding_name(finding->kind));
+    p101_fputs(env, err, ", \"evidence\": {\"event_schema\": \"p101-tool-event-format-v3\", \"resource_event\": ", stdout);
+    p101_printf(env, err, "%zu}, \"kind\": ", finding->sequence);
     p101_report_json_string(env, err, stdout, p101_report_finding_name(finding->kind));
     p101_printf(env, err, ", \"pid\": %ld", finding->pid);
 
-    if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE || finding->kind == FINDING_EXEC_INHERIT)
+    if(p101_report_finding_is_generic(finding->kind))
+    {
+        p101_fputs(env, err, ", \"resource_class\": ", stdout);
+        p101_report_json_string(env, err, stdout, finding->resource_class == NULL ? "resource" : finding->resource_class);
+        p101_fputs(env, err, ", \"resource_id\": ", stdout);
+        p101_report_json_string(env, err, stdout, finding->resource_id == NULL ? "?" : finding->resource_id);
+        p101_printf(env, err, ", \"context_id\": %zu", finding->context_id);
+    }
+    else if(finding->kind == FINDING_FD_LEAK || finding->kind == FINDING_DOUBLE_CLOSE || finding->kind == FINDING_STRAY_CLOSE || finding->kind == FINDING_EXEC_INHERIT)
     {
         p101_printf(env, err, ", \"fd\": %d", finding->fd);
         if(finding->kind == FINDING_EXEC_INHERIT)
@@ -238,6 +268,11 @@ void p101_report_print_json_finding(const struct p101_env *env, struct p101_erro
     p101_fputs(env, err, ", \"trace\": [", stdout);
     p101_report_print_json_trace_context(env, err, model, finding);
     p101_fputs(env, err, "]}", stdout);
+}
+
+static bool p101_report_finding_is_generic(enum finding_kind kind)
+{
+    return (kind == FINDING_RESOURCE_LEAK || kind == FINDING_RESOURCE_DOUBLE_RELEASE || kind == FINDING_RESOURCE_STRAY_RELEASE || kind == FINDING_RESOURCE_BAD_REPLACE || kind == FINDING_RESOURCE_DUPLICATE_ACQUIRE) != 0;
 }
 
 void p101_report_print_json_trace_context(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding)

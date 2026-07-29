@@ -3,7 +3,6 @@
 
 enum
 {
-    LINE_MAX_BYTES       = 4096,
     PATH_MAX_BYTES       = 4096,
     MSG_LEN              = 256,
     DECIMAL_BASE         = 10,

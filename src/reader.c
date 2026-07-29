@@ -1,40 +1,43 @@
 #include "reader.h"
 #include "constants.h"
 #include "io.h"
+#include "memory.h"
 #include "model.h"
+#include "model_support.h"
 #include "parse.h"
 #include <p101_c/p101_string.h>
 #include <p101_env/env.h>
+#include <p101_tool_event/event.h>
 #include <stdio.h>
 
 void p101_report_read_resources(const struct p101_env *env, struct p101_error *err, const char *path, struct report_model *model)
 {
     FILE *stream;
     bool  owned;
-    char  line[LINE_MAX_BYTES];
+    char  line[P101_TOOL_EVENT_LINE_MAX_BYTES];
 
     P101_TRACE(env);
     stream = p101_report_open_input(env, err, path, &owned);
 
     while(p101_error_has_no_error(err))
     {
-        struct resource_event      event;
-        enum line_status           status;
-        p101_env_event_line_status line_status;
+        struct resource_event       event;
+        enum line_status            status;
+        p101_tool_event_line_status line_status;
 
-        line_status = p101_env_read_event_line(err, stream, line, sizeof(line));
+        line_status = p101_tool_event_read_line(err, stream, line, sizeof(line));
 
-        if(line_status == P101_ENV_EVENT_LINE_EOF)
+        if(line_status == P101_TOOL_EVENT_LINE_EOF)
         {
             break;
         }
 
-        if(line_status == P101_ENV_EVENT_LINE_ERROR)
+        if(line_status == P101_TOOL_EVENT_LINE_ERROR)
         {
             break;
         }
 
-        if(line_status == P101_ENV_EVENT_LINE_MALFORMED)
+        if(line_status == P101_TOOL_EVENT_LINE_MALFORMED)
         {
             model->resource_malformed++;
             continue;
@@ -90,30 +93,30 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
 {
     FILE *stream;
     bool  owned;
-    char  line[LINE_MAX_BYTES];
+    char  line[P101_TOOL_EVENT_LINE_MAX_BYTES];
 
     P101_TRACE(env);
     stream = p101_report_open_input(env, err, path, &owned);
 
     while(p101_error_has_no_error(err))
     {
-        struct call_event          event;
-        enum line_status           status;
-        p101_env_event_line_status line_status;
+        struct call_event           event;
+        enum line_status            status;
+        p101_tool_event_line_status line_status;
 
-        line_status = p101_env_read_event_line(err, stream, line, sizeof(line));
+        line_status = p101_tool_event_read_line(err, stream, line, sizeof(line));
 
-        if(line_status == P101_ENV_EVENT_LINE_EOF)
+        if(line_status == P101_TOOL_EVENT_LINE_EOF)
         {
             break;
         }
 
-        if(line_status == P101_ENV_EVENT_LINE_ERROR)
+        if(line_status == P101_TOOL_EVENT_LINE_ERROR)
         {
             break;
         }
 
-        if(line_status == P101_ENV_EVENT_LINE_MALFORMED)
+        if(line_status == P101_TOOL_EVENT_LINE_MALFORMED)
         {
             model->call_malformed++;
             continue;

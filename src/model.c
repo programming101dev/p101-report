@@ -1,11 +1,14 @@
 #include "model.h"
 #include "constants.h"
 #include "finding.h"
+#include "memory.h"
+#include "model_generic.h"
+#include "model_support.h"
+#include <p101_tool_event/ownership.h>
 #include <stdint.h>
 
-static void p101_report_add_finding(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct finding *finding);
 static void p101_report_add_resource_event(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event);
-static bool p101_report_grow_array(const struct p101_env *env, struct p101_error *err, void **items, size_t *capacity, size_t count, size_t item_size);
+static void p101_report_finish_exec(const struct p101_env *env, struct p101_error *err, struct report_model *model, long pid, bool end_of_input);
 static void p101_report_rollback_failed_exec(const struct p101_env *env, struct report_model *model, const struct resource_event *event);
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
@@ -17,6 +20,10 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
     size_t index;
 
     P101_TRACE(env);
+    if(event->kind != RESOURCE_EXEC && event->kind != RESOURCE_EXEC_FAIL)
+    {
+        p101_report_finish_exec(env, err, model, event->pid, false);
+    }
     p101_report_add_resource_event(env, err, model, event);
 
 #ifdef __clang__
@@ -27,8 +34,9 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
     {
         case RESOURCE_FD_OPEN:
         {
-            if(p101_report_grow_array(env, err, (void **)&model->fds, &model->fd_capacity, model->fd_count, sizeof(*model->fds)))
+            if(p101_report_grow_array_internal(env, err, (void **)&model->fds, &model->fd_capacity, model->fd_count, sizeof(*model->fds)))
             {
+                p101_memset(env, &model->fds[model->fd_count], 0, sizeof(*model->fds));
                 model->fds[model->fd_count].pid      = event->pid;
                 model->fds[model->fd_count].fd       = event->fd;
                 model->fds[model->fd_count].site     = event->site;
@@ -39,14 +47,16 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
         }
         case RESOURCE_FD_CLOSE:
         {
-            bool found;
+            bool                                     found;
+            p101_tool_event_ownership_release_result release_result;
+            p101_tool_event_ownership_state          ownership_state;
 
             found = false;
             for(index = 0; index < model->fd_count; index++)
             {
                 if(model->fds[index].pid == event->pid && model->fds[index].fd == event->fd)
                 {
-                    if(p101_report_grow_array(env, err, (void **)&model->closed_fds, &model->closed_fd_capacity, model->closed_fd_count, sizeof(*model->closed_fds)))
+                    if(p101_report_grow_array_internal(env, err, (void **)&model->closed_fds, &model->closed_fd_capacity, model->closed_fd_count, sizeof(*model->closed_fds)))
                     {
                         model->closed_fds[model->closed_fd_count].pid      = event->pid;
                         model->closed_fds[model->closed_fd_count].fd       = event->fd;
@@ -61,12 +71,17 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                 }
             }
 
+            ownership_state = P101_TOOL_EVENT_OWNERSHIP_NEVER;
+            if(found)
+            {
+                ownership_state = P101_TOOL_EVENT_OWNERSHIP_LIVE;
+            }
+            release_result = p101_tool_event_ownership_classify_release(ownership_state);
             if(!found)
             {
                 struct finding finding;
 
                 p101_memset(env, &finding, 0, sizeof(finding));
-                finding.kind     = FINDING_STRAY_CLOSE;
                 finding.pid      = event->pid;
                 finding.fd       = event->fd;
                 finding.site     = event->site;
@@ -76,20 +91,21 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                 {
                     if(model->closed_fds[index].pid == event->pid && model->closed_fds[index].fd == event->fd)
                     {
-                        finding.kind              = FINDING_DOUBLE_CLOSE;
                         finding.previous_site     = model->closed_fds[index].site;
                         finding.previous_sequence = model->closed_fds[index].sequence;
+                        release_result            = p101_tool_event_ownership_classify_release(P101_TOOL_EVENT_OWNERSHIP_RELEASED);
                         break;
                     }
                 }
 
-                p101_report_add_finding(env, err, model, &finding);
+                finding.kind = release_result == P101_TOOL_EVENT_OWNERSHIP_RELEASE_DUPLICATE ? FINDING_DOUBLE_CLOSE : FINDING_STRAY_CLOSE;
+                p101_report_add_finding_internal(env, err, model, &finding);
             }
             break;
         }
         case RESOURCE_ALLOC:
         {
-            if(event->ptr != NULL && p101_strcmp(env, event->ptr, "-") != 0 && p101_report_grow_array(env, err, (void **)&model->allocs, &model->alloc_capacity, model->alloc_count, sizeof(*model->allocs)))
+            if(event->ptr != NULL && p101_strcmp(env, event->ptr, "-") != 0 && p101_report_grow_array_internal(env, err, (void **)&model->allocs, &model->alloc_capacity, model->alloc_count, sizeof(*model->allocs)))
             {
                 model->allocs[model->alloc_count].pid      = event->pid;
                 model->allocs[model->alloc_count].ptr      = p101_report_dup_text(env, err, event->ptr);
@@ -102,14 +118,16 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
         }
         case RESOURCE_FREE:
         {
-            bool found;
+            bool                                     found;
+            p101_tool_event_ownership_release_result release_result;
+            p101_tool_event_ownership_state          ownership_state;
 
             found = false;
             for(index = 0; index < model->alloc_count; index++)
             {
                 if(model->allocs[index].pid == event->pid && p101_strcmp(env, model->allocs[index].ptr, event->ptr) == 0)
                 {
-                    if(p101_report_grow_array(env, err, (void **)&model->freed_allocs, &model->freed_alloc_capacity, model->freed_alloc_count, sizeof(*model->freed_allocs)))
+                    if(p101_report_grow_array_internal(env, err, (void **)&model->freed_allocs, &model->freed_alloc_capacity, model->freed_alloc_count, sizeof(*model->freed_allocs)))
                     {
                         model->freed_allocs[model->freed_alloc_count].pid      = event->pid;
                         model->freed_allocs[model->freed_alloc_count].ptr      = p101_report_dup_text(env, err, event->ptr);
@@ -125,12 +143,17 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                 }
             }
 
+            ownership_state = P101_TOOL_EVENT_OWNERSHIP_NEVER;
+            if(found)
+            {
+                ownership_state = P101_TOOL_EVENT_OWNERSHIP_LIVE;
+            }
+            release_result = p101_tool_event_ownership_classify_release(ownership_state);
             if(!found)
             {
                 struct finding finding;
 
                 p101_memset(env, &finding, 0, sizeof(finding));
-                finding.kind     = FINDING_STRAY_FREE;
                 finding.pid      = event->pid;
                 finding.ptr      = event->ptr;
                 finding.site     = event->site;
@@ -140,23 +163,32 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                 {
                     if(model->freed_allocs[index].pid == event->pid && p101_strcmp(env, model->freed_allocs[index].ptr, event->ptr) == 0)
                     {
-                        finding.kind              = FINDING_DOUBLE_FREE;
                         finding.previous_site     = model->freed_allocs[index].site;
                         finding.previous_sequence = model->freed_allocs[index].sequence;
+                        release_result            = p101_tool_event_ownership_classify_release(P101_TOOL_EVENT_OWNERSHIP_RELEASED);
                         break;
                     }
                 }
 
-                p101_report_add_finding(env, err, model, &finding);
+                finding.kind = release_result == P101_TOOL_EVENT_OWNERSHIP_RELEASE_DUPLICATE ? FINDING_DOUBLE_FREE : FINDING_STRAY_FREE;
+                p101_report_add_finding_internal(env, err, model, &finding);
             }
             break;
         }
         case RESOURCE_REALLOC:
         {
-            bool found;
+            bool                                     found;
+            bool                                     source_is_null;
+            p101_tool_event_ownership_replace_result replace_result;
+            p101_tool_event_ownership_state          ownership_state;
 
-            found = false;
+            source_is_null = false;
             if(event->ptr == NULL || p101_strcmp(env, event->ptr, "-") == 0)
+            {
+                source_is_null = true;
+            }
+            found = false;
+            if(source_is_null)
             {
                 found = true;
             }
@@ -172,7 +204,13 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                 }
             }
 
-            if(!found)
+            ownership_state = P101_TOOL_EVENT_OWNERSHIP_NEVER;
+            if(found)
+            {
+                ownership_state = P101_TOOL_EVENT_OWNERSHIP_LIVE;
+            }
+            replace_result = p101_tool_event_ownership_classify_replace(source_is_null, ownership_state);
+            if(replace_result == P101_TOOL_EVENT_OWNERSHIP_REPLACE_BAD)
             {
                 struct finding finding;
 
@@ -182,10 +220,10 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                 finding.ptr      = event->ptr;
                 finding.site     = event->site;
                 finding.sequence = event->sequence;
-                p101_report_add_finding(env, err, model, &finding);
+                p101_report_add_finding_internal(env, err, model, &finding);
             }
 
-            if(event->new_ptr != NULL && p101_strcmp(env, event->new_ptr, "-") != 0 && p101_report_grow_array(env, err, (void **)&model->allocs, &model->alloc_capacity, model->alloc_count, sizeof(*model->allocs)))
+            if(event->new_ptr != NULL && p101_strcmp(env, event->new_ptr, "-") != 0 && p101_report_grow_array_internal(env, err, (void **)&model->allocs, &model->alloc_capacity, model->alloc_count, sizeof(*model->allocs)))
             {
                 model->allocs[model->alloc_count].pid      = event->pid;
                 model->allocs[model->alloc_count].ptr      = p101_report_dup_text(env, err, event->new_ptr);
@@ -232,8 +270,9 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                     }
                 }
 
-                if(!child_has_live_fd && !child_closed_fd && p101_report_grow_array(env, err, (void **)&model->fds, &model->fd_capacity, model->fd_count, sizeof(*model->fds)))
+                if(!child_has_live_fd && !child_closed_fd && p101_report_grow_array_internal(env, err, (void **)&model->fds, &model->fd_capacity, model->fd_count, sizeof(*model->fds)))
                 {
+                    p101_memset(env, &model->fds[model->fd_count], 0, sizeof(*model->fds));
                     model->fds[model->fd_count].pid      = event->child_pid;
                     model->fds[model->fd_count].fd       = model->fds[index].fd;
                     model->fds[model->fd_count].site     = model->fds[index].site;
@@ -254,26 +293,32 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
         }
         case RESOURCE_EXEC:
         {
-            if(event->cloexec == 0)
+            for(index = 0; index < model->fd_count; index++)
             {
-                for(index = 0; index < model->fd_count; index++)
+                if(model->fds[index].pid == event->pid && model->fds[index].fd == event->fd)
                 {
-                    if(model->fds[index].pid == event->pid && model->fds[index].fd == event->fd)
-                    {
-                        struct finding finding;
+                    struct finding finding;
 
-                        p101_memset(env, &finding, 0, sizeof(finding));
-                        finding.kind              = FINDING_EXEC_INHERIT;
-                        finding.pid               = event->pid;
-                        finding.fd                = event->fd;
-                        finding.ptr               = event->target;
-                        finding.site              = event->site;
-                        finding.sequence          = event->sequence;
-                        finding.previous_site     = model->fds[index].site;
-                        finding.previous_sequence = model->fds[index].sequence;
-                        p101_report_add_finding(env, err, model, &finding);
+                    model->fds[index].exec_pending  = 1;
+                    model->fds[index].exec_cloexec  = event->cloexec;
+                    model->fds[index].exec_site     = event->site;
+                    model->fds[index].exec_sequence = event->sequence;
+                    if(!p101_tool_event_ownership_exec_inherits(P101_TOOL_EVENT_OWNERSHIP_LIVE, event->cloexec != 0))
+                    {
                         break;
                     }
+
+                    p101_memset(env, &finding, 0, sizeof(finding));
+                    finding.kind              = FINDING_EXEC_INHERIT;
+                    finding.pid               = event->pid;
+                    finding.fd                = event->fd;
+                    finding.ptr               = event->target;
+                    finding.site              = event->site;
+                    finding.sequence          = event->sequence;
+                    finding.previous_site     = model->fds[index].site;
+                    finding.previous_sequence = model->fds[index].sequence;
+                    p101_report_add_finding_internal(env, err, model, &finding);
+                    break;
                 }
             }
             break;
@@ -281,6 +326,11 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
         case RESOURCE_EXEC_FAIL:
         {
             p101_report_rollback_failed_exec(env, model, event);
+            break;
+        }
+        case RESOURCE_GENERIC:
+        {
+            p101_report_ingest_generic(env, err, model, event);
             break;
         }
         default:
@@ -298,6 +348,19 @@ void p101_report_finalize_leaks(const struct p101_env *env, struct p101_error *e
     size_t index;
 
     P101_TRACE(env);
+    index = 0U;
+    while(index < model->fd_count && p101_error_has_no_error(err))
+    {
+        if(model->fds[index].exec_pending != 0)
+        {
+            p101_report_finish_exec(env, err, model, model->fds[index].pid, true);
+            index = 0U;
+        }
+        else
+        {
+            index++;
+        }
+    }
 
     for(index = 0; index < model->fd_count && p101_error_has_no_error(err); index++)
     {
@@ -309,7 +372,7 @@ void p101_report_finalize_leaks(const struct p101_env *env, struct p101_error *e
         finding.fd       = model->fds[index].fd;
         finding.site     = model->fds[index].site;
         finding.sequence = model->fds[index].sequence;
-        p101_report_add_finding(env, err, model, &finding);
+        p101_report_add_finding_internal(env, err, model, &finding);
     }
 
     for(index = 0; index < model->alloc_count && p101_error_has_no_error(err); index++)
@@ -323,7 +386,55 @@ void p101_report_finalize_leaks(const struct p101_env *env, struct p101_error *e
         finding.size     = model->allocs[index].size;
         finding.site     = model->allocs[index].site;
         finding.sequence = model->allocs[index].sequence;
-        p101_report_add_finding(env, err, model, &finding);
+        p101_report_add_finding_internal(env, err, model, &finding);
+    }
+
+    p101_report_finalize_generic(env, err, model);
+}
+
+static void p101_report_finish_exec(const struct p101_env *env, struct p101_error *err, struct report_model *model, long pid, bool end_of_input)
+{
+    size_t index;
+
+    index = 0U;
+    while(index < model->fd_count && p101_error_has_no_error(err))
+    {
+        struct live_fd *fd;
+
+        fd = &model->fds[index];
+        if(fd->pid != pid || fd->exec_pending == 0)
+        {
+            index++;
+            continue;
+        }
+
+        if(fd->exec_cloexec != 0)
+        {
+            if(p101_report_grow_array_internal(env, err, (void **)&model->closed_fds, &model->closed_fd_capacity, model->closed_fd_count, sizeof(*model->closed_fds)))
+            {
+                model->closed_fds[model->closed_fd_count].pid      = fd->pid;
+                model->closed_fds[model->closed_fd_count].fd       = fd->fd;
+                model->closed_fds[model->closed_fd_count].site     = fd->exec_site;
+                model->closed_fds[model->closed_fd_count].sequence = fd->exec_sequence;
+                model->closed_fd_count++;
+            }
+            model->fds[index] = model->fds[model->fd_count - 1U];
+            model->fd_count--;
+            continue;
+        }
+
+        if(end_of_input)
+        {
+            model->fds[index] = model->fds[model->fd_count - 1U];
+            model->fd_count--;
+            continue;
+        }
+
+        fd->exec_pending  = 0;
+        fd->exec_cloexec  = 0;
+        fd->exec_site     = 0U;
+        fd->exec_sequence = 0U;
+        index++;
     }
 }
 
@@ -337,6 +448,17 @@ static void p101_report_rollback_failed_exec(const struct p101_env *env, struct 
     if(model->resource_count == 0U)
     {
         return;
+    }
+
+    for(read_index = 0U; read_index < model->fd_count; read_index++)
+    {
+        if(model->fds[read_index].pid == event->pid && model->fds[read_index].exec_pending != 0)
+        {
+            model->fds[read_index].exec_pending  = 0;
+            model->fds[read_index].exec_cloexec  = 0;
+            model->fds[read_index].exec_site     = 0U;
+            model->fds[read_index].exec_sequence = 0U;
+        }
     }
 
     /*
@@ -380,46 +502,24 @@ static void p101_report_rollback_failed_exec(const struct p101_env *env, struct 
     model->finding_count = write_index;
 }
 
-size_t p101_report_intern_site(const struct p101_env *env, struct p101_error *err, struct report_model *model, const char *file_name, const char *function_name, int line_number)
-{
-    size_t index;
-
-    for(index = 0; index < model->site_count; index++)
-    {
-        if(model->sites[index].line_number == line_number && p101_strcmp(env, model->sites[index].file_name, file_name) == 0 && p101_strcmp(env, model->sites[index].function_name, function_name) == 0)
-        {
-            goto done;
-        }
-    }
-
-    if(p101_report_grow_array(env, err, (void **)&model->sites, &model->site_capacity, model->site_count, sizeof(*model->sites)))
-    {
-        index                             = model->site_count;
-        model->sites[index].file_name     = p101_report_dup_text(env, err, file_name);
-        model->sites[index].function_name = p101_report_dup_text(env, err, function_name);
-        model->sites[index].line_number   = line_number;
-        model->site_count++;
-    }
-    else
-    {
-        index = 0;
-    }
-
-done:
-    return index;
-}
-
 static void p101_report_add_resource_event(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event)
 {
     struct resource_event *copy;
 
-    if(!p101_report_grow_array(env, err, (void **)&model->resources, &model->resource_capacity, model->resource_count, sizeof(*model->resources)))
+    if(!p101_report_grow_array_internal(env, err, (void **)&model->resources, &model->resource_capacity, model->resource_count, sizeof(*model->resources)))
     {
         goto done;
     }
 
-    copy  = &model->resources[model->resource_count];
-    *copy = *event;
+    copy                 = &model->resources[model->resource_count];
+    *copy                = *event;
+    copy->ptr            = NULL;
+    copy->new_ptr        = NULL;
+    copy->target         = NULL;
+    copy->resource_class = NULL;
+    copy->resource_id    = NULL;
+    copy->related_id     = NULL;
+    copy->metadata       = NULL;
     if(event->ptr != NULL)
     {
         copy->ptr = p101_report_dup_text(env, err, event->ptr);
@@ -432,134 +532,32 @@ static void p101_report_add_resource_event(const struct p101_env *env, struct p1
     {
         copy->target = p101_report_dup_text(env, err, event->target);
     }
-    model->resource_count++;
+    if(event->resource_class != NULL)
+    {
+        copy->resource_class = p101_report_dup_text(env, err, event->resource_class);
+    }
+    if(event->resource_id != NULL)
+    {
+        copy->resource_id = p101_report_dup_text(env, err, event->resource_id);
+    }
+    if(event->related_id != NULL)
+    {
+        copy->related_id = p101_report_dup_text(env, err, event->related_id);
+    }
+    if(event->metadata != NULL)
+    {
+        copy->metadata = p101_report_dup_text(env, err, event->metadata);
+    }
+    if(p101_error_has_error(err))
+    {
+        p101_report_free_resource_event(env, copy);
+        p101_memset(env, copy, 0, sizeof(*copy));
+    }
+    else
+    {
+        model->resource_count++;
+    }
 
 done:
     return;
-}
-
-static void p101_report_add_finding(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct finding *finding)
-{
-    if(p101_report_grow_array(env, err, (void **)&model->findings, &model->finding_capacity, model->finding_count, sizeof(*model->findings)))
-    {
-        model->findings[model->finding_count] = *finding;
-        if(finding->ptr != NULL)
-        {
-            model->findings[model->finding_count].ptr = p101_report_dup_text(env, err, finding->ptr);
-        }
-        model->finding_count++;
-    }
-}
-
-void p101_report_add_call(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct call_event *event)
-{
-    if(p101_report_grow_array(env, err, (void **)&model->calls, &model->call_capacity, model->call_count, sizeof(*model->calls)))
-    {
-        model->calls[model->call_count] = *event;
-        model->call_count++;
-    }
-}
-
-static bool p101_report_grow_array(const struct p101_env *env, struct p101_error *err, void **items, size_t *capacity, size_t count, size_t item_size)
-{
-    bool   ok;
-    size_t new_capacity;
-    void  *new_items;
-
-    ok = true;
-
-    if(count < *capacity)
-    {
-        goto done;
-    }
-
-    new_capacity = (*capacity == 0U) ? FIRST_CAPACITY : (*capacity * 2U);
-    if(new_capacity < *capacity || (item_size != 0U && new_capacity > (SIZE_MAX / item_size)))
-    {
-        P101_ERROR_RAISE_ERRNO(err, ENOMEM);
-        ok = false;
-        goto done;
-    }
-
-    new_items = p101_realloc(env, err, *items, new_capacity * item_size);
-    if(new_items == NULL)
-    {
-        ok = false;
-        goto done;
-    }
-
-    *items    = new_items;
-    *capacity = new_capacity;
-
-done:
-    return ok;
-}
-
-char *p101_report_dup_text(const struct p101_env *env, struct p101_error *err, const char *text)
-{
-    return p101_strdup(env, err, text == NULL ? "" : text);
-}
-
-void p101_report_free_model(const struct p101_env *env, struct report_model *model)
-{
-    size_t index;
-
-    for(index = 0; index < model->site_count; index++)
-    {
-        p101_free(env, model->sites[index].file_name);
-        p101_free(env, model->sites[index].function_name);
-    }
-    p101_free(env, model->sites);
-
-    for(index = 0; index < model->resource_count; index++)
-    {
-        p101_report_free_resource_event(env, &model->resources[index]);
-    }
-    p101_free(env, model->resources);
-
-    for(index = 0; index < model->call_count; index++)
-    {
-        p101_report_free_call_event(env, &model->calls[index]);
-    }
-    p101_free(env, model->calls);
-
-    for(index = 0; index < model->alloc_count; index++)
-    {
-        p101_free(env, model->allocs[index].ptr);
-    }
-    p101_free(env, model->allocs);
-
-    for(index = 0; index < model->freed_alloc_count; index++)
-    {
-        p101_free(env, model->freed_allocs[index].ptr);
-    }
-    p101_free(env, model->freed_allocs);
-    p101_free(env, model->fds);
-    p101_free(env, model->closed_fds);
-
-    for(index = 0; index < model->finding_count; index++)
-    {
-        p101_free(env, model->findings[index].ptr);
-    }
-    p101_free(env, model->findings);
-}
-
-void p101_report_free_resource_event(const struct p101_env *env, struct resource_event *event)
-{
-    p101_free(env, event->ptr);
-    p101_free(env, event->new_ptr);
-    p101_free(env, event->target);
-    event->ptr     = NULL;
-    event->new_ptr = NULL;
-    event->target  = NULL;
-}
-
-void p101_report_free_call_event(const struct p101_env *env, struct call_event *event)
-{
-    p101_free(env, event->function_name);
-    p101_free(env, event->call_name);
-    p101_free(env, event->arguments);
-    p101_free(env, event->result);
-    p101_free(env, event->file_name);
-    p101_memset(env, event, 0, sizeof(*event));
 }

@@ -1,6 +1,7 @@
 #ifndef P101_REPORT_TYPES_H
 #define P101_REPORT_TYPES_H
 
+#include <p101_tool_event/lifecycle.h>
 #include <stddef.h>
 
 enum resource_kind
@@ -13,7 +14,8 @@ enum resource_kind
     RESOURCE_FORK,
     RESOURCE_SPAWN,
     RESOURCE_EXEC,
-    RESOURCE_EXEC_FAIL
+    RESOURCE_EXEC_FAIL,
+    RESOURCE_GENERIC
 };
 
 enum call_kind
@@ -39,7 +41,12 @@ enum finding_kind
     FINDING_DOUBLE_FREE,
     FINDING_STRAY_FREE,
     FINDING_BAD_REALLOC,
-    FINDING_EXEC_INHERIT
+    FINDING_EXEC_INHERIT,
+    FINDING_RESOURCE_LEAK,
+    FINDING_RESOURCE_DOUBLE_RELEASE,
+    FINDING_RESOURCE_STRAY_RELEASE,
+    FINDING_RESOURCE_BAD_REPLACE,
+    FINDING_RESOURCE_DUPLICATE_ACQUIRE
 };
 
 struct source_site
@@ -51,22 +58,28 @@ struct source_site
 
 struct resource_event
 {
-    enum resource_kind kind;
-    long               pid;
-    long               child_pid;
-    int                fd;
-    int                cloexec;
-    char              *ptr;
-    char              *new_ptr;
-    char              *target;
-    size_t             size;
-    size_t             site;
-    size_t             sequence;
-    size_t             event_sequence;
-    size_t             monotonic_ns;
-    size_t             wall_unix_ns;
-    int                monotonic_ns_available;
-    int                wall_unix_ns_available;
+    enum resource_kind       kind;
+    long                     pid;
+    long                     child_pid;
+    int                      fd;
+    int                      cloexec;
+    char                    *ptr;
+    char                    *new_ptr;
+    char                    *target;
+    char                    *resource_class;
+    char                    *resource_id;
+    char                    *related_id;
+    char                    *metadata;
+    p101_tool_event_resource_kind generic_kind;
+    size_t                   size;
+    size_t                   site;
+    size_t                   sequence;
+    size_t                   context_id;
+    size_t                   event_sequence;
+    size_t                   monotonic_ns;
+    size_t                   wall_unix_ns;
+    int                      monotonic_ns_available;
+    int                      wall_unix_ns_available;
 };
 
 struct call_event
@@ -93,6 +106,10 @@ struct live_fd
     int    fd;
     size_t site;
     size_t sequence;
+    int    exec_pending;
+    int    exec_cloexec;
+    size_t exec_site;
+    size_t exec_sequence;
 };
 
 struct closed_fd
@@ -126,9 +143,12 @@ struct finding
     long              pid;
     int               fd;
     char             *ptr;
+    char             *resource_class;
+    char             *resource_id;
     size_t            size;
     size_t            site;
     size_t            sequence;
+    size_t            context_id;
     size_t            previous_site;
     size_t            previous_sequence;
 };
@@ -164,6 +184,9 @@ struct report_model
     struct finding *findings;
     size_t          finding_count;
     size_t          finding_capacity;
+
+    struct p101_tool_event_lifecycle_model *generic_lifecycle;
+    int                          generic_finalized;
 
     size_t resource_records;
     size_t call_records;

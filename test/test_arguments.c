@@ -1,6 +1,7 @@
 #include "cli.h"
 #include "constants.h"
 #include "errors.h"
+#include "memory.h"
 #include "model.h"
 #include "parse.h"
 #include "reader.h"
@@ -116,7 +117,7 @@ static void test_parse_rejects_missing_call_log(void)
 
 static void test_parse_resource_line_accepts_fd_open(void)
 {
-    char                  line[] = "P101FD\t2\t42\t1\t100\t200\tOPEN\t3\t17\tmain\tserver.c\n";
+    char                  line[] = "P101FD\t3\t42\t7\t1\t100\t200\tOPEN\t3\t17\tmain\tserver.c\n";
     struct report_model   model;
     struct resource_event event;
     enum line_status      status;
@@ -193,9 +194,69 @@ static void test_parse_resource_line_accepts_spawn_boundary(void)
     p101_report_free_model(env, &model);
 }
 
+static void test_generic_resource_lifecycle_produces_source_backed_finding(void)
+{
+    char                  acquire_line[] = "P101RESOURCE\t3\t42\t7\t8\t100\t200\tACQUIRE\tmapping\t0x1000\t-\t4096\tprivate\t21\tmap_file\tmap.c\n";
+    struct report_model   model;
+    struct resource_event event;
+
+    p101_memset(env, &model, 0, sizeof(model));
+    p101_memset(env, &event, 0, sizeof(event));
+
+    TEST_ASSERT_EQUAL_INT(LINE_OK, p101_report_parse_resource_line(env, error, acquire_line, &event, &model, 1));
+    TEST_ASSERT_EQUAL_INT(RESOURCE_GENERIC, event.kind);
+    TEST_ASSERT_EQUAL_INT(P101_TOOL_EVENT_RESOURCE_ACQUIRE, event.generic_kind);
+    TEST_ASSERT_EQUAL_STRING("mapping", event.resource_class);
+    TEST_ASSERT_EQUAL_STRING("0x1000", event.resource_id);
+    TEST_ASSERT_EQUAL_UINT64(7, event.context_id);
+    p101_report_ingest_resource(env, error, &model, &event);
+    p101_report_free_resource_event(env, &event);
+
+    p101_report_finalize_leaks(env, error, &model);
+
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+    TEST_ASSERT_EQUAL_UINT64(1, model.finding_count);
+    TEST_ASSERT_EQUAL_INT(FINDING_RESOURCE_LEAK, model.findings[0].kind);
+    TEST_ASSERT_EQUAL_STRING("mapping", model.findings[0].resource_class);
+    TEST_ASSERT_EQUAL_STRING("0x1000", model.findings[0].resource_id);
+    TEST_ASSERT_EQUAL_UINT64(7, model.findings[0].context_id);
+    TEST_ASSERT_EQUAL_UINT64(1, model.findings[0].sequence);
+    TEST_ASSERT_EQUAL_STRING("map.c", model.sites[model.findings[0].site].file_name);
+    TEST_ASSERT_EQUAL_STRING("map_file", model.sites[model.findings[0].site].function_name);
+    TEST_ASSERT_EQUAL_INT(21, model.sites[model.findings[0].site].line_number);
+
+    p101_report_free_model(env, &model);
+}
+
+static void test_generic_resource_balanced_lifecycle_has_no_finding(void)
+{
+    char                  acquire_line[] = "P101RESOURCE\t3\t42\t7\t8\t100\t200\tACQUIRE\tmapping\t0x1000\t-\t4096\tprivate\t21\tmap_file\tmap.c\n";
+    char                  release_line[] = "P101RESOURCE\t3\t42\t8\t9\t110\t210\tRELEASE\tmapping\t0x1000\t-\t0\t-\t22\tunmap_file\tmap.c\n";
+    struct report_model   model;
+    struct resource_event event;
+
+    p101_memset(env, &model, 0, sizeof(model));
+    p101_memset(env, &event, 0, sizeof(event));
+
+    TEST_ASSERT_EQUAL_INT(LINE_OK, p101_report_parse_resource_line(env, error, acquire_line, &event, &model, 1));
+    p101_report_ingest_resource(env, error, &model, &event);
+    p101_report_free_resource_event(env, &event);
+
+    p101_memset(env, &event, 0, sizeof(event));
+    TEST_ASSERT_EQUAL_INT(LINE_OK, p101_report_parse_resource_line(env, error, release_line, &event, &model, 2));
+    p101_report_ingest_resource(env, error, &model, &event);
+    p101_report_free_resource_event(env, &event);
+
+    p101_report_finalize_leaks(env, error, &model);
+
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+    TEST_ASSERT_EQUAL_UINT64(0, model.finding_count);
+    p101_report_free_model(env, &model);
+}
+
 static void test_parse_call_line_accepts_exit(void)
 {
-    char              line[] = "P101CALL\t2\t42\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
+    char              line[] = "P101CALL\t3\t42\t7\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
     struct call_event event;
     enum line_status  status;
 
@@ -318,6 +379,8 @@ int main(void)
     RUN_TEST(test_parse_resource_line_accepts_fd_open);
     RUN_TEST(test_parse_resource_line_accepts_v2_fd_open);
     RUN_TEST(test_parse_resource_line_accepts_spawn_boundary);
+    RUN_TEST(test_generic_resource_lifecycle_produces_source_backed_finding);
+    RUN_TEST(test_generic_resource_balanced_lifecycle_has_no_finding);
     RUN_TEST(test_parse_call_line_accepts_exit);
     RUN_TEST(test_parse_call_line_accepts_v2_exit);
     RUN_TEST(test_failed_exec_removes_only_its_inheritance_findings);

@@ -6,9 +6,10 @@ turns them into one correlated story:
 - `resources.log` from `P101_RESOURCE_LOG`
 - `calls.log` from `P101_CALL_LOG`
 
-It replays descriptor and allocation events, finds leaks and bad releases, then
-prints matching call records for the same pid/source site. It is the “what
-happened here?” layer above `p101-resource-tracker` and `p101-trace`.
+It replays descriptor, allocation, and generic resource lifecycle events, finds
+leaks and bad releases, then prints matching call records for the same
+pid/source site. It is the “what happened here?” layer above
+`p101-resource-tracker` and `p101-trace`.
 Failed exec attempts are rolled back when their `P101EXECFAIL` record arrives,
 so only descriptors crossing a successful image boundary are reported.
 Successful `posix_spawn` calls appear as `P101SPAWN` lifetime boundaries. The
@@ -64,9 +65,19 @@ Findings include stable diagnostic IDs such as `P101-FD-001` and
 
 JSON output includes `event_schema` and `event_id_policy`. The event IDs shown
 in reports are derived from the 1-based parsed-record sequence in each input
-stream, while lifetime durations use the v2 monotonic timestamps emitted by
+stream, while lifetime durations use the v3 monotonic timestamps emitted by
 `lib_env`. The canonical log contract is documented by `p101-observe` in
-`../p101-observe/docs/event-format.md`.
+the
+[`lib_tool_event` protocol specification](https://github.com/programming101dev/lib_tool_event/blob/main/docs/event-format.md).
+Every JSON finding also uses the common `id`, `severity`, `location`, `message`,
+and `evidence` envelope; trace and resource-specific fields remain alongside
+that envelope.
+
+The reader uses `P101_TOOL_EVENT_LINE_MAX_BYTES` from `lib_tool_event` and the same
+exec/CLOEXEC semantics as `p101-resource-tracker`. The stack regression corpus
+compares their findings case by case so the two models cannot silently drift.
+That parity includes `P101-RESOURCE-001` through `P101-RESOURCE-005` for
+generic leaks, double releases, stray releases, and malformed replacements.
 
 The goal is not to replace the lower-level tools. `p101-resource-tracker` remains
 the strict analyzer, and `p101-trace` remains the dedicated call-log renderer.

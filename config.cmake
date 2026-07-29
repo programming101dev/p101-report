@@ -35,13 +35,17 @@ set(main_SOURCES
         src/io.c
         src/json.c
         src/lifetime.c
+        src/lifetime_common.c
+        src/lifetime_mermaid.c
         src/main.c
+        src/memory.c
         src/model.c
+        src/model_generic.c
+        src/model_support.c
         src/output.c
         src/parse.c
         src/reader.c
         src/runner.c
-        src/text.c
 )
 
 set(main_HEADERS
@@ -53,17 +57,22 @@ set(main_HEADERS
         include/io.h
         include/json.h
         include/lifetime.h
+        include/lifetime_common.h
+        include/lifetime_mermaid.h
+        include/memory.h
         include/model.h
+        include/model_generic.h
+        include/model_support.h
         include/output.h
         include/parse.h
         include/reader.h
         include/runner.h
-        include/text.h
         include/types.h
 )
 
 set(main_LINK_LIBRARIES
         p101_error
+        p101_tool_event
         p101_env
         p101_c
         p101_posix

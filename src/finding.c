@@ -77,6 +77,31 @@ const char *p101_report_finding_name(enum finding_kind kind)
             name = "descriptor inherited across exec";
             break;
         }
+        case FINDING_RESOURCE_LEAK:
+        {
+            name = "leaked resource";
+            break;
+        }
+        case FINDING_RESOURCE_DOUBLE_RELEASE:
+        {
+            name = "double release";
+            break;
+        }
+        case FINDING_RESOURCE_STRAY_RELEASE:
+        {
+            name = "release of unknown resource";
+            break;
+        }
+        case FINDING_RESOURCE_BAD_REPLACE:
+        {
+            name = "replacement without a new resource identifier";
+            break;
+        }
+        case FINDING_RESOURCE_DUPLICATE_ACQUIRE:
+        {
+            name = "duplicate acquisition of a live resource";
+            break;
+        }
         default:
         {
             name = "unknown finding";
@@ -138,6 +163,31 @@ const char *p101_report_finding_id(enum finding_kind kind)
         case FINDING_EXEC_INHERIT:
         {
             id = "P101-FD-004";
+            break;
+        }
+        case FINDING_RESOURCE_LEAK:
+        {
+            id = "P101-RESOURCE-001";
+            break;
+        }
+        case FINDING_RESOURCE_DOUBLE_RELEASE:
+        {
+            id = "P101-RESOURCE-002";
+            break;
+        }
+        case FINDING_RESOURCE_STRAY_RELEASE:
+        {
+            id = "P101-RESOURCE-003";
+            break;
+        }
+        case FINDING_RESOURCE_BAD_REPLACE:
+        {
+            id = "P101-RESOURCE-004";
+            break;
+        }
+        case FINDING_RESOURCE_DUPLICATE_ACQUIRE:
+        {
+            id = "P101-RESOURCE-005";
             break;
         }
         default:

@@ -1,5 +1,6 @@
 #include "runner.h"
 #include "constants.h"
+#include "memory.h"
 #include "model.h"
 #include "output.h"
 #include "reader.h"

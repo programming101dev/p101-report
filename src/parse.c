@@ -1,17 +1,20 @@
 #include "parse.h"
+#include "memory.h"
 #include "model.h"
+#include "model_support.h"
 #include <p101_c/p101_string.h>
+#include <p101_tool_event/event.h>
 
-static enum line_status map_parse_status(p101_env_event_parse_status status);
-static void             copy_resource_metadata(const struct p101_env_event_record *record, struct resource_event *event, size_t sequence);
-static void             copy_call_metadata(const struct p101_env_event_record *record, struct call_event *event, size_t sequence);
+static enum line_status map_parse_status(p101_tool_event_parse_status status);
+static void             copy_resource_metadata(const struct p101_tool_event_record *record, struct resource_event *event, size_t sequence);
+static void             copy_call_metadata(const struct p101_tool_event_record *record, struct call_event *event, size_t sequence);
 static enum line_status unknown_parse_status(void);
 
 enum line_status p101_report_parse_resource_line(const struct p101_env *env, struct p101_error *err, char *line, struct resource_event *event, struct report_model *model, size_t sequence)
 {
-    enum line_status             status;
-    p101_env_event_parse_status  parse_status;
-    struct p101_env_event_record record;
+    enum line_status              status;
+    p101_tool_event_parse_status  parse_status;
+    struct p101_tool_event_record record;
 
     status = LINE_MALFORMED;
 
@@ -20,7 +23,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
         goto done;
     }
 
-    parse_status = p101_env_parse_event_line(line, &record);
+    parse_status = p101_tool_event_parse_line(line, &record);
     status       = map_parse_status(parse_status);
 
     if(status != LINE_OK)
@@ -36,20 +39,20 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
 #endif
     switch(record.record_kind)
     {
-        case P101_ENV_EVENT_RECORD_FD:
+        case P101_TOOL_EVENT_RECORD_FD:
         {
-            event->kind = (record.fd_kind == P101_ENV_EVENT_FD_OPEN) ? RESOURCE_FD_OPEN : RESOURCE_FD_CLOSE;
+            event->kind = (record.fd_kind == P101_TOOL_EVENT_FD_OPEN) ? RESOURCE_FD_OPEN : RESOURCE_FD_CLOSE;
             event->fd   = record.fd;
             event->site = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
-        case P101_ENV_EVENT_RECORD_ALLOC:
+        case P101_TOOL_EVENT_RECORD_ALLOC:
         {
-            if(record.alloc_kind == P101_ENV_EVENT_ALLOC_ALLOC)
+            if(record.alloc_kind == P101_TOOL_EVENT_ALLOC_ALLOC)
             {
                 event->kind = RESOURCE_ALLOC;
             }
-            else if(record.alloc_kind == P101_ENV_EVENT_ALLOC_FREE)
+            else if(record.alloc_kind == P101_TOOL_EVENT_ALLOC_FREE)
             {
                 event->kind = RESOURCE_FREE;
             }
@@ -63,14 +66,14 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             event->site    = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
-        case P101_ENV_EVENT_RECORD_FORK:
+        case P101_TOOL_EVENT_RECORD_FORK:
         {
             event->kind      = RESOURCE_FORK;
             event->child_pid = record.child_pid;
             event->site      = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
-        case P101_ENV_EVENT_RECORD_SPAWN:
+        case P101_TOOL_EVENT_RECORD_SPAWN:
         {
             event->kind      = RESOURCE_SPAWN;
             event->child_pid = record.child_pid;
@@ -78,7 +81,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             event->site      = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
-        case P101_ENV_EVENT_RECORD_EXEC:
+        case P101_TOOL_EVENT_RECORD_EXEC:
         {
             event->kind    = RESOURCE_EXEC;
             event->fd      = record.fd;
@@ -87,14 +90,32 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             event->site    = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
-        case P101_ENV_EVENT_RECORD_EXEC_FAIL:
+        case P101_TOOL_EVENT_RECORD_EXEC_FAIL:
         {
             event->kind   = RESOURCE_EXEC_FAIL;
             event->target = p101_report_dup_text(env, err, record.target);
             event->site   = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
-        case P101_ENV_EVENT_RECORD_CALL:
+        case P101_TOOL_EVENT_RECORD_RESOURCE:
+        {
+            event->kind           = RESOURCE_GENERIC;
+            event->generic_kind   = record.resource_kind;
+            event->resource_class = p101_report_dup_text(env, err, record.resource_class);
+            event->resource_id    = p101_report_dup_text(env, err, record.resource_id);
+            if(record.related_id != NULL)
+            {
+                event->related_id = p101_report_dup_text(env, err, record.related_id);
+            }
+            if(record.metadata != NULL)
+            {
+                event->metadata = p101_report_dup_text(env, err, record.metadata);
+            }
+            event->size = record.size;
+            event->site = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            break;
+        }
+        case P101_TOOL_EVENT_RECORD_CALL:
         {
             status = LINE_OTHER;
             break;
@@ -120,9 +141,9 @@ done:
 
 enum line_status p101_report_parse_call_line(const struct p101_env *env, struct p101_error *err, char *line, struct call_event *event, size_t sequence)
 {
-    enum line_status             status;
-    p101_env_event_parse_status  parse_status;
-    struct p101_env_event_record record;
+    enum line_status              status;
+    p101_tool_event_parse_status  parse_status;
+    struct p101_tool_event_record record;
 
     status = LINE_MALFORMED;
 
@@ -131,7 +152,7 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
         goto done;
     }
 
-    parse_status = p101_env_parse_event_line(line, &record);
+    parse_status = p101_tool_event_parse_line(line, &record);
     status       = map_parse_status(parse_status);
 
     if(status != LINE_OK)
@@ -139,14 +160,14 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
         goto done;
     }
 
-    if(record.record_kind != P101_ENV_EVENT_RECORD_CALL)
+    if(record.record_kind != P101_TOOL_EVENT_RECORD_CALL)
     {
         status = LINE_OTHER;
         goto done;
     }
 
     copy_call_metadata(&record, event, sequence);
-    event->kind          = (record.call_kind == P101_ENV_EVENT_CALL_ENTER) ? CALL_ENTER : CALL_EXIT;
+    event->kind          = (record.call_kind == P101_TOOL_EVENT_CALL_ENTER) ? CALL_ENTER : CALL_EXIT;
     event->line_number   = record.line_number;
     event->function_name = p101_report_dup_text(env, err, record.function_name);
     event->call_name     = p101_report_dup_text(env, err, record.call_name);
@@ -163,7 +184,7 @@ done:
     return status;
 }
 
-static enum line_status map_parse_status(p101_env_event_parse_status status)
+static enum line_status map_parse_status(p101_tool_event_parse_status status)
 {
     enum line_status mapped;
 
@@ -173,22 +194,22 @@ static enum line_status map_parse_status(p101_env_event_parse_status status)
 #endif
     switch(status)
     {
-        case P101_ENV_EVENT_PARSE_OTHER:
+        case P101_TOOL_EVENT_PARSE_OTHER:
         {
             mapped = LINE_OTHER;
             break;
         }
-        case P101_ENV_EVENT_PARSE_OK:
+        case P101_TOOL_EVENT_PARSE_OK:
         {
             mapped = LINE_OK;
             break;
         }
-        case P101_ENV_EVENT_PARSE_BAD_VERSION:
+        case P101_TOOL_EVENT_PARSE_BAD_VERSION:
         {
             mapped = LINE_BAD_VERSION;
             break;
         }
-        case P101_ENV_EVENT_PARSE_MALFORMED:
+        case P101_TOOL_EVENT_PARSE_MALFORMED:
         {
             mapped = LINE_MALFORMED;
             break;
@@ -211,11 +232,12 @@ static enum line_status unknown_parse_status(void)
     return LINE_MALFORMED;
 }
 
-static void copy_resource_metadata(const struct p101_env_event_record *record, struct resource_event *event, size_t sequence)
+static void copy_resource_metadata(const struct p101_tool_event_record *record, struct resource_event *event, size_t sequence)
 {
     event->pid                    = record->pid;
     event->child_pid              = -1;
     event->sequence               = sequence;
+    event->context_id             = record->context_id;
     event->event_sequence         = record->sequence;
     event->monotonic_ns           = record->monotonic_ns;
     event->wall_unix_ns           = record->wall_unix_ns;
@@ -223,7 +245,7 @@ static void copy_resource_metadata(const struct p101_env_event_record *record, s
     event->wall_unix_ns_available = record->wall_unix_ns_available;
 }
 
-static void copy_call_metadata(const struct p101_env_event_record *record, struct call_event *event, size_t sequence)
+static void copy_call_metadata(const struct p101_tool_event_record *record, struct call_event *event, size_t sequence)
 {
     event->pid                    = record->pid;
     event->sequence               = sequence;
