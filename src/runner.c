@@ -1,4 +1,5 @@
 #include "runner.h"
+#include "bundle.h"
 #include "constants.h"
 #include "memory.h"
 #include "model.h"
@@ -31,7 +32,14 @@ int p101_report_run(const struct p101_env *env, struct p101_error *err, const st
         goto done;
     }
 
-    p101_report_print_report(env, err, args, &model);
+    if(args->bundle_output_dir == NULL)
+    {
+        p101_report_print_report(env, err, args, &model);
+    }
+    else
+    {
+        p101_report_write_bundle(env, err, args, &model);
+    }
 
     if(p101_error_has_error(err))
     {

@@ -36,9 +36,9 @@ void p101_report_parse_arguments(const struct p101_env *env, struct p101_error *
 
     while(
 #ifdef P101_REPORT_TESTING
-        (opt = (forced_option == NULL) ? p101_getopt(env, argc, argv, ":hvjmd:r:c:") : (unsigned char)*forced_option) != -1 &&
+        (opt = (forced_option == NULL) ? p101_getopt(env, argc, argv, ":hvjmb:d:r:c:") : (unsigned char)*forced_option) != -1 &&
 #else
-        (opt = p101_getopt(env, argc, argv, ":hvjmd:r:c:")) != -1 &&
+        (opt = p101_getopt(env, argc, argv, ":hvjmb:d:r:c:")) != -1 &&
 #endif
         p101_error_has_no_error(err))
     {
@@ -64,6 +64,11 @@ void p101_report_parse_arguments(const struct p101_env *env, struct p101_error *
             case 'm':
             {
                 args->format = REPORT_FORMAT_MERMAID;
+                break;
+            }
+            case 'b':
+            {
+                args->bundle_output_dir = optarg;
                 break;
             }
             case 'd':
@@ -158,6 +163,17 @@ void p101_report_check_arguments(const struct p101_env *env, struct p101_error *
         goto done;
     }
 
+    if(args->bundle_output_dir != NULL && args->bundle_output_dir[0] == '\0')
+    {
+        P101_ERROR_RAISE_USER(err, "The bundle output directory must not be empty.", ERR_USAGE);
+        goto done;
+    }
+    if(args->bundle_output_dir != NULL && args->format != REPORT_FORMAT_TEXT)
+    {
+        P101_ERROR_RAISE_USER(err, "The bundle output mode cannot be combined with -j or -m.", ERR_USAGE);
+        goto done;
+    }
+
     if(args->resource_log == NULL)
     {
         p101_report_join_path(env, err, resource_buf, resource_buf_size, args->report_dir, "resources.log");
@@ -198,7 +214,7 @@ _Noreturn void p101_report_usage(const struct p101_env *env, struct p101_error *
         p101_fprintf(env, err, stream, "%s\n\n", message);
     }
 
-    p101_fprintf(env, err, stream, "Usage: %s [-h] [-v] [-j|-m] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]\n", program_name);
+    p101_fprintf(env, err, stream, "Usage: %s [-h] [-v] [-j|-m] [-b <output-dir>] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]\n", program_name);
     p101_fputs(env, err, "\n", stream);
     p101_fputs(env, err, "Correlate p101 resource and call logs into one report.\n", stream);
     p101_fputs(env, err, "\n", stream);
@@ -207,6 +223,7 @@ _Noreturn void p101_report_usage(const struct p101_env *env, struct p101_error *
     p101_fputs(env, err, "  -v                  trace p101-report itself\n", stream);
     p101_fputs(env, err, "  -j                  write JSON instead of the text report\n", stream);
     p101_fputs(env, err, "  -m                  write Mermaid resource lifetime graph instead of the text report\n", stream);
+    p101_fputs(env, err, "  -b <output-dir>     write text, JSON, and Mermaid artifacts in one analysis pass\n", stream);
     p101_fputs(env, err, "  -d <report-dir>     read resources.log and calls.log from a p101-observe report directory\n", stream);
     p101_fputs(env, err, "  -r <resources.log>  resource log to replay\n", stream);
     p101_fputs(env, err, "  -c <calls.log>      call log to correlate\n", stream);

@@ -53,6 +53,7 @@ endfunction()
 p101_add_test(test_arguments
     test_arguments.c
     test_more.c
+    ../src/bundle.c
     ../src/cli.c
     ../src/finding.c
     ../src/io.c
@@ -72,6 +73,7 @@ p101_add_test(test_arguments
 target_compile_definitions(test_arguments PRIVATE P101_REPORT_TESTING=1)
 
 add_executable(p101_report_coverage_cli
+    ../src/bundle.c
     ../src/cli.c
     ../src/finding.c
     ../src/io.c

@@ -15,6 +15,7 @@ struct arguments
     const char        *report_dir;
     const char        *resource_log;
     const char        *call_log;
+    const char        *bundle_output_dir;
     enum report_format format;
     bool               verbose;
 };

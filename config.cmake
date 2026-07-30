@@ -30,6 +30,7 @@ set(LIBRARY_TARGETS "")
 set(main_OUTPUT_NAME p101-report)
 
 set(main_SOURCES
+        src/bundle.c
         src/cli.c
         src/finding.c
         src/io.c
@@ -50,6 +51,7 @@ set(main_SOURCES
 
 set(main_HEADERS
         include/arguments.h
+        include/bundle.h
         include/cli.h
         include/constants.h
         include/errors.h

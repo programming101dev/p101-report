@@ -20,7 +20,7 @@ opaque.
 ## Usage
 
 ```sh
-p101-report [-h] [-v] [-j|-m] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]
+p101-report [-h] [-v] [-j|-m] [-b <output-dir>] [-d <report-dir>] [-r <resources.log> -c <calls.log>] [report-dir]
 ```
 
 Examples:
@@ -30,6 +30,7 @@ p101-observe -o run-report -- ./my-program config.txt
 p101-report run-report
 p101-report -j run-report
 p101-report -m run-report > resource-lifetimes.md
+p101-report -b run-report run-report
 
 p101-report -r run-report/resources.log -c run-report/calls.log
 ```
@@ -62,6 +63,10 @@ evidence and prevent a clean exit status. Older event formats are rejected.
 Use `-j` for the same report as JSON when another tool or grading script needs
 to consume the result. Use `-m` to render resource lifetimes as a Mermaid graph
 for Markdown viewers that support Mermaid.
+
+Use `-b <output-dir>` to generate `correlated-report.txt`,
+`correlated-report.json`, and `resource-lifetimes.md` from one parse and one
+canonical runtime model. This is the mode used by `p101-observe`.
 
 Findings include stable diagnostic IDs such as `P101-FD-001` and
 `P101-ALLOC-002`. The current ID list is documented in

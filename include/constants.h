@@ -11,6 +11,7 @@ enum
     FIRST_CAPACITY       = 16,
     TRACE_CONTEXT_LIMIT  = 5,
     LIFETIME_TEXT_LIMIT  = 40,
+    REPORT_FILE_MODE     = 0600,
     EXIT_CLEAN           = 0,
     EXIT_FINDINGS        = 1,
     EXIT_TROUBLE         = 2

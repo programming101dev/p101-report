@@ -37,6 +37,7 @@ expect 2 -Z
 expect 2 -r
 expect 2 -c
 expect 2 -d
+expect 2 -b
 expect 2 "-"$'\001'
 export P101_REPORT_TEST_OPTION=@
 expect 2
@@ -50,11 +51,17 @@ expect 2 -c "$work/calls.log"
 expect 2 -d "$work" "$work"
 expect 2 "$work" extra
 expect 2 -d ''
+expect 2 -b '' "$work"
+expect 2 -j -b "$work" "$work"
 expect 2 -r '' -c "$work/calls.log"
 expect 2 -r "$work/resources.log" -c ''
 expect 1 -v "$work"
 expect 1 -j "$work"
 expect 1 -m "$work"
+expect 1 -b "$work" "$work"
+test -s "$work/correlated-report.txt"
+test -s "$work/correlated-report.json"
+test -s "$work/resource-lifetimes.md"
 expect 1 -r "$work/resources.log" -c "$work/calls.log"
 
 cat >"$work/clean-resources.log" <<'LOG'
