@@ -11,7 +11,7 @@
 
 void p101_report_arguments_init(const struct p101_env *env, struct arguments *args)
 {
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     p101_memset(env, args, 0, sizeof(*args));
     args->format = REPORT_FORMAT_TEXT;
 }
@@ -20,7 +20,7 @@ void p101_report_parse_arguments(const struct p101_env *env, struct p101_error *
 {
     int opt;
 
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     opterr = 0;
 
     if(argc == 2 && p101_strcmp(env, argv[1], "--help") == 0)
@@ -129,7 +129,7 @@ done:
 
 void p101_report_check_arguments(const struct p101_env *env, struct p101_error *err, struct arguments *args, char *resource_buf, size_t resource_buf_size, char *call_buf, size_t call_buf_size)
 {
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
 
     if(args->report_dir == NULL && (args->resource_log == NULL || args->call_log == NULL))
     {

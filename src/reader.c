@@ -16,7 +16,7 @@ void p101_report_read_resources(const struct p101_env *env, struct p101_error *e
     bool  owned;
     char  line[P101_TOOL_EVENT_LINE_MAX_BYTES];
 
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     stream = p101_report_open_input(env, err, path, &owned);
 
     while(p101_error_has_no_error(err))
@@ -63,6 +63,10 @@ void p101_report_read_resources(const struct p101_env *env, struct p101_error *e
                 p101_report_ingest_resource(env, err, model, &event);
                 break;
             }
+            case LINE_COMPLETE:
+            {
+                break;
+            }
             case LINE_MALFORMED:
             {
                 model->resource_malformed++;
@@ -95,7 +99,7 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
     bool  owned;
     char  line[P101_TOOL_EVENT_LINE_MAX_BYTES];
 
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     stream = p101_report_open_input(env, err, path, &owned);
 
     while(p101_error_has_no_error(err))
@@ -123,7 +127,7 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
         }
 
         p101_memset(env, &event, 0, sizeof(event));
-        status = p101_report_parse_call_line(env, err, line, &event, model->call_records + 1U);
+        status = p101_report_parse_call_line(env, err, line, &event, model, model->call_records + 1U);
 
 #ifdef __clang__
     #pragma clang diagnostic push
@@ -141,6 +145,10 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
                 model->call_records++;
                 p101_report_add_call(env, err, model, &event);
                 p101_memset(env, &event, 0, sizeof(event));
+                break;
+            }
+            case LINE_COMPLETE:
+            {
                 break;
             }
             case LINE_MALFORMED:

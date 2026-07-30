@@ -19,12 +19,17 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
 {
     size_t index;
 
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     if(event->kind != RESOURCE_EXEC && event->kind != RESOURCE_EXEC_FAIL)
     {
         p101_report_finish_exec(env, err, model, event->pid, false);
     }
     p101_report_add_resource_event(env, err, model, event);
+    if(event->kind == RESOURCE_FD_OPEN || event->kind == RESOURCE_FD_CLOSE || event->kind == RESOURCE_ALLOC || event->kind == RESOURCE_FREE || event->kind == RESOURCE_REALLOC || event->kind == RESOURCE_FORK || event->kind == RESOURCE_EXEC ||
+       event->kind == RESOURCE_EXEC_FAIL || event->kind == RESOURCE_GENERIC)
+    {
+        p101_report_ingest_generic(env, err, model, event);
+    }
 
 #ifdef __clang__
     #pragma clang diagnostic push
@@ -47,11 +52,6 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
         }
         case RESOURCE_FD_CLOSE:
         {
-            bool                                     found;
-            p101_tool_event_ownership_release_result release_result;
-            p101_tool_event_ownership_state          ownership_state;
-
-            found = false;
             for(index = 0; index < model->fd_count; index++)
             {
                 if(model->fds[index].pid == event->pid && model->fds[index].fd == event->fd)
@@ -66,41 +66,10 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                     }
                     model->fds[index] = model->fds[model->fd_count - 1U];
                     model->fd_count--;
-                    found = true;
                     break;
                 }
             }
 
-            ownership_state = P101_TOOL_EVENT_OWNERSHIP_NEVER;
-            if(found)
-            {
-                ownership_state = P101_TOOL_EVENT_OWNERSHIP_LIVE;
-            }
-            release_result = p101_tool_event_ownership_classify_release(ownership_state);
-            if(!found)
-            {
-                struct finding finding;
-
-                p101_memset(env, &finding, 0, sizeof(finding));
-                finding.pid      = event->pid;
-                finding.fd       = event->fd;
-                finding.site     = event->site;
-                finding.sequence = event->sequence;
-
-                for(index = 0; index < model->closed_fd_count; index++)
-                {
-                    if(model->closed_fds[index].pid == event->pid && model->closed_fds[index].fd == event->fd)
-                    {
-                        finding.previous_site     = model->closed_fds[index].site;
-                        finding.previous_sequence = model->closed_fds[index].sequence;
-                        release_result            = p101_tool_event_ownership_classify_release(P101_TOOL_EVENT_OWNERSHIP_RELEASED);
-                        break;
-                    }
-                }
-
-                finding.kind = release_result == P101_TOOL_EVENT_OWNERSHIP_RELEASE_DUPLICATE ? FINDING_DOUBLE_CLOSE : FINDING_STRAY_CLOSE;
-                p101_report_add_finding_internal(env, err, model, &finding);
-            }
             break;
         }
         case RESOURCE_ALLOC:
@@ -118,11 +87,6 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
         }
         case RESOURCE_FREE:
         {
-            bool                                     found;
-            p101_tool_event_ownership_release_result release_result;
-            p101_tool_event_ownership_state          ownership_state;
-
-            found = false;
             for(index = 0; index < model->alloc_count; index++)
             {
                 if(model->allocs[index].pid == event->pid && p101_strcmp(env, model->allocs[index].ptr, event->ptr) == 0)
@@ -138,49 +102,16 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                     p101_free(env, model->allocs[index].ptr);
                     model->allocs[index] = model->allocs[model->alloc_count - 1U];
                     model->alloc_count--;
-                    found = true;
                     break;
                 }
             }
 
-            ownership_state = P101_TOOL_EVENT_OWNERSHIP_NEVER;
-            if(found)
-            {
-                ownership_state = P101_TOOL_EVENT_OWNERSHIP_LIVE;
-            }
-            release_result = p101_tool_event_ownership_classify_release(ownership_state);
-            if(!found)
-            {
-                struct finding finding;
-
-                p101_memset(env, &finding, 0, sizeof(finding));
-                finding.pid      = event->pid;
-                finding.ptr      = event->ptr;
-                finding.site     = event->site;
-                finding.sequence = event->sequence;
-
-                for(index = 0; index < model->freed_alloc_count; index++)
-                {
-                    if(model->freed_allocs[index].pid == event->pid && p101_strcmp(env, model->freed_allocs[index].ptr, event->ptr) == 0)
-                    {
-                        finding.previous_site     = model->freed_allocs[index].site;
-                        finding.previous_sequence = model->freed_allocs[index].sequence;
-                        release_result            = p101_tool_event_ownership_classify_release(P101_TOOL_EVENT_OWNERSHIP_RELEASED);
-                        break;
-                    }
-                }
-
-                finding.kind = release_result == P101_TOOL_EVENT_OWNERSHIP_RELEASE_DUPLICATE ? FINDING_DOUBLE_FREE : FINDING_STRAY_FREE;
-                p101_report_add_finding_internal(env, err, model, &finding);
-            }
             break;
         }
         case RESOURCE_REALLOC:
         {
-            bool                                     found;
-            bool                                     source_is_null;
-            p101_tool_event_ownership_replace_result replace_result;
-            p101_tool_event_ownership_state          ownership_state;
+            bool found;
+            bool source_is_null;
 
             source_is_null = false;
             if(event->ptr == NULL || p101_strcmp(env, event->ptr, "-") == 0)
@@ -202,25 +133,6 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                     model->alloc_count--;
                     found = true;
                 }
-            }
-
-            ownership_state = P101_TOOL_EVENT_OWNERSHIP_NEVER;
-            if(found)
-            {
-                ownership_state = P101_TOOL_EVENT_OWNERSHIP_LIVE;
-            }
-            replace_result = p101_tool_event_ownership_classify_replace(source_is_null, ownership_state);
-            if(replace_result == P101_TOOL_EVENT_OWNERSHIP_REPLACE_BAD)
-            {
-                struct finding finding;
-
-                p101_memset(env, &finding, 0, sizeof(finding));
-                finding.kind     = FINDING_BAD_REALLOC;
-                finding.pid      = event->pid;
-                finding.ptr      = event->ptr;
-                finding.site     = event->site;
-                finding.sequence = event->sequence;
-                p101_report_add_finding_internal(env, err, model, &finding);
             }
 
             if(event->new_ptr != NULL && p101_strcmp(env, event->new_ptr, "-") != 0 && p101_report_grow_array_internal(env, err, (void **)&model->allocs, &model->alloc_capacity, model->alloc_count, sizeof(*model->allocs)))
@@ -315,6 +227,8 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
                     finding.ptr               = event->target;
                     finding.site              = event->site;
                     finding.sequence          = event->sequence;
+                    finding.event_sequence    = event->event_sequence;
+                    finding.context_id        = event->context_id;
                     finding.previous_site     = model->fds[index].site;
                     finding.previous_sequence = model->fds[index].sequence;
                     p101_report_add_finding_internal(env, err, model, &finding);
@@ -329,10 +243,6 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
             break;
         }
         case RESOURCE_GENERIC:
-        {
-            p101_report_ingest_generic(env, err, model, event);
-            break;
-        }
         default:
         {
             break;
@@ -347,7 +257,7 @@ void p101_report_finalize_leaks(const struct p101_env *env, struct p101_error *e
 {
     size_t index;
 
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     index = 0U;
     while(index < model->fd_count && p101_error_has_no_error(err))
     {
@@ -360,33 +270,6 @@ void p101_report_finalize_leaks(const struct p101_env *env, struct p101_error *e
         {
             index++;
         }
-    }
-
-    for(index = 0; index < model->fd_count && p101_error_has_no_error(err); index++)
-    {
-        struct finding finding;
-
-        p101_memset(env, &finding, 0, sizeof(finding));
-        finding.kind     = FINDING_FD_LEAK;
-        finding.pid      = model->fds[index].pid;
-        finding.fd       = model->fds[index].fd;
-        finding.site     = model->fds[index].site;
-        finding.sequence = model->fds[index].sequence;
-        p101_report_add_finding_internal(env, err, model, &finding);
-    }
-
-    for(index = 0; index < model->alloc_count && p101_error_has_no_error(err); index++)
-    {
-        struct finding finding;
-
-        p101_memset(env, &finding, 0, sizeof(finding));
-        finding.kind     = FINDING_ALLOC_LEAK;
-        finding.pid      = model->allocs[index].pid;
-        finding.ptr      = model->allocs[index].ptr;
-        finding.size     = model->allocs[index].size;
-        finding.site     = model->allocs[index].site;
-        finding.sequence = model->allocs[index].sequence;
-        p101_report_add_finding_internal(env, err, model, &finding);
     }
 
     p101_report_finalize_generic(env, err, model);

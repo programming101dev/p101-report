@@ -112,7 +112,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
             p101_memcpy(env, buf, data, size);
             buf[size] = '\0';
-            (void)p101_report_parse_call_line(env, err, buf, &call_event, 1U);
+            (void)p101_report_parse_call_line(env, err, buf, &call_event, &model, 1U);
             p101_report_free_call_event(env, &call_event);
         }
     }

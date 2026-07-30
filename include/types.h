@@ -28,6 +28,7 @@ enum line_status
 {
     LINE_OTHER = 0,
     LINE_OK,
+    LINE_COMPLETE,
     LINE_MALFORMED,
     LINE_BAD_VERSION
 };
@@ -86,6 +87,7 @@ struct call_event
 {
     enum call_kind kind;
     long           pid;
+    size_t         context_id;
     int            line_number;
     char          *function_name;
     char          *call_name;
@@ -148,6 +150,7 @@ struct finding
     size_t            size;
     size_t            site;
     size_t            sequence;
+    size_t            event_sequence;
     size_t            context_id;
     size_t            previous_site;
     size_t            previous_sequence;
@@ -196,6 +199,8 @@ struct report_model
     size_t call_malformed;
     size_t resource_bad_version;
     size_t call_bad_version;
+    struct p101_tool_event_stream_health resource_stream_health;
+    struct p101_tool_event_stream_health call_stream_health;
 };
 
 #endif    // P101_REPORT_TYPES_H

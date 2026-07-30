@@ -5,10 +5,13 @@
 #include "lifetime.h"
 #include "lifetime_mermaid.h"
 #include <p101_c/p101_stdio.h>
+#include <p101_c/p101_string.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 static bool p101_report_finding_is_generic(enum finding_kind kind);
+static void p101_report_trace_bounds(const struct p101_env *env, const struct report_model *model, const struct finding *finding, size_t *begin, size_t *end);
 
 void p101_report_print_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
 {
@@ -46,7 +49,7 @@ void p101_report_print_report(const struct p101_env *env, struct p101_error *err
 
 void p101_report_print_mermaid_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
 {
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     p101_fputs(env, err, "```mermaid\n", stdout);
     p101_fputs(env, err, "flowchart LR\n", stdout);
     p101_printf(env, err, "    summary[\"resources: %zu records; calls: %zu records; findings: %zu\"]\n", model->resource_records, model->call_records, model->finding_count);
@@ -59,15 +62,37 @@ void p101_report_print_text_report(const struct p101_env *env, struct p101_error
 {
     size_t index;
 
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     p101_printf(env, err, "p101-report\n");
-    p101_printf(env, err, "event schema: p101-tool-event-format-v3\n");
+    p101_printf(env, err, "event schema: " P101_TOOL_EVENT_SCHEMA_NAME "\n");
     p101_printf(env, err, "resource log: %s\n", args->resource_log);
     p101_printf(env, err, "call log:     %s\n\n", args->call_log);
 
     p101_printf(env, err, "Summary\n");
     p101_printf(env, err, "  resource records: %zu parsed, %zu skipped, %zu malformed, %zu unsupported version\n", model->resource_records, model->resource_skipped, model->resource_malformed, model->resource_bad_version);
     p101_printf(env, err, "  call records:     %zu parsed, %zu skipped, %zu malformed, %zu unsupported version\n", model->call_records, model->call_skipped, model->call_malformed, model->call_bad_version);
+    p101_printf(env,
+                err,
+                "  resource stream:  %s (%zu producer%s, %zu incomplete, %zu completion record%s, %zu producer write failure%s)\n",
+                p101_tool_event_stream_health_is_complete(&model->resource_stream_health) ? "complete" : "INCOMPLETE",
+                model->resource_stream_health.producer_count,
+                model->resource_stream_health.producer_count == 1U ? "" : "s",
+                p101_tool_event_stream_health_incomplete_producers(&model->resource_stream_health),
+                model->resource_stream_health.completion_records,
+                model->resource_stream_health.completion_records == 1U ? "" : "s",
+                model->resource_stream_health.producer_write_failures,
+                model->resource_stream_health.producer_write_failures == 1U ? "" : "s");
+    p101_printf(env,
+                err,
+                "  call stream:      %s (%zu producer%s, %zu incomplete, %zu completion record%s, %zu producer write failure%s)\n",
+                p101_tool_event_stream_health_is_complete(&model->call_stream_health) ? "complete" : "INCOMPLETE",
+                model->call_stream_health.producer_count,
+                model->call_stream_health.producer_count == 1U ? "" : "s",
+                p101_tool_event_stream_health_incomplete_producers(&model->call_stream_health),
+                model->call_stream_health.completion_records,
+                model->call_stream_health.completion_records == 1U ? "" : "s",
+                model->call_stream_health.producer_write_failures,
+                model->call_stream_health.producer_write_failures == 1U ? "" : "s");
     p101_printf(env, err, "  findings:         %zu\n\n", model->finding_count);
 
     p101_report_print_text_lifetimes(env, err, model);
@@ -91,7 +116,7 @@ done:
 void p101_report_print_json_report(const struct p101_env *env, struct p101_error *err, const struct arguments *args, const struct report_model *model)
 {
     p101_fputs(env, err, "{\n  \"schema\": \"p101-report-findings-v3\",\n", stdout);
-    p101_fputs(env, err, "  \"event_schema\": \"p101-tool-event-format-v3\",\n", stdout);
+    p101_fputs(env, err, "  \"event_schema\": \"" P101_TOOL_EVENT_SCHEMA_NAME "\",\n", stdout);
     p101_fputs(env, err, "  \"event_id_policy\": \"derived-1-based-input-sequence\",\n", stdout);
     p101_fputs(env, err, "  \"resource_log\": ", stdout);
     p101_report_json_string(env, err, stdout, args->resource_log);
@@ -106,6 +131,20 @@ void p101_report_print_json_report(const struct p101_env *env, struct p101_error
     p101_printf(env, err, "    \"call_skipped\": %zu,\n", model->call_skipped);
     p101_printf(env, err, "    \"call_malformed\": %zu,\n", model->call_malformed);
     p101_printf(env, err, "    \"call_bad_version\": %zu,\n", model->call_bad_version);
+    p101_printf(env, err, "    \"resource_complete\": %s,\n", p101_tool_event_stream_health_is_complete(&model->resource_stream_health) ? "true" : "false");
+    p101_printf(env, err, "    \"resource_producers\": %zu,\n", model->resource_stream_health.producer_count);
+    p101_printf(env, err, "    \"resource_incomplete_producers\": %zu,\n", p101_tool_event_stream_health_incomplete_producers(&model->resource_stream_health));
+    p101_printf(env, err, "    \"resource_completion_records\": %zu,\n", model->resource_stream_health.completion_records);
+    p101_printf(env, err, "    \"resource_producer_write_failures\": %zu,\n", model->resource_stream_health.producer_write_failures);
+    p101_printf(env, err, "    \"resource_duplicate_sequences\": %zu,\n", model->resource_stream_health.duplicate_sequences);
+    p101_printf(env, err, "    \"resource_records_after_completion\": %zu,\n", model->resource_stream_health.records_after_completion);
+    p101_printf(env, err, "    \"call_complete\": %s,\n", p101_tool_event_stream_health_is_complete(&model->call_stream_health) ? "true" : "false");
+    p101_printf(env, err, "    \"call_producers\": %zu,\n", model->call_stream_health.producer_count);
+    p101_printf(env, err, "    \"call_incomplete_producers\": %zu,\n", p101_tool_event_stream_health_incomplete_producers(&model->call_stream_health));
+    p101_printf(env, err, "    \"call_completion_records\": %zu,\n", model->call_stream_health.completion_records);
+    p101_printf(env, err, "    \"call_producer_write_failures\": %zu,\n", model->call_stream_health.producer_write_failures);
+    p101_printf(env, err, "    \"call_duplicate_sequences\": %zu,\n", model->call_stream_health.duplicate_sequences);
+    p101_printf(env, err, "    \"call_records_after_completion\": %zu,\n", model->call_stream_health.records_after_completion);
     p101_printf(env, err, "    \"findings\": %zu\n", model->finding_count);
     p101_fputs(env, err, "  },\n  \"lifetimes\": [", stdout);
     p101_report_print_json_lifetimes(env, err, model);
@@ -177,20 +216,21 @@ void p101_report_print_finding(const struct p101_env *env, struct p101_error *er
 
 void p101_report_print_trace_context(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding)
 {
-    const struct source_site *site;
-    size_t                    printed;
-    size_t                    index;
+    size_t printed;
+    size_t index;
+    size_t begin;
+    size_t end;
 
-    site    = &model->sites[finding->site];
     printed = 0;
+    p101_report_trace_bounds(env, model, finding, &begin, &end);
 
     p101_printf(env, err, "   trace:\n");
-    for(index = 0; index < model->call_count && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); index++)
+    for(index = begin; index != SIZE_MAX && index <= end && index < model->call_count && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); index++)
     {
         const struct call_event *call;
 
         call = &model->calls[index];
-        if(p101_report_site_matches_call(env, site, call, finding->pid))
+        if(call->pid == finding->pid && call->context_id == finding->context_id)
         {
             p101_printf(env, err, "     #%zu %s %s(%s) -> %s at %s:%d in %s\n", call->sequence, call->kind == CALL_ENTER ? "ENTER" : "EXIT ", call->call_name, call->arguments, call->result, call->file_name, call->line_number, call->function_name);
             printed++;
@@ -217,7 +257,7 @@ void p101_report_print_json_finding(const struct p101_env *env, struct p101_erro
     p101_report_json_string(env, err, stdout, site->function_name);
     p101_fputs(env, err, "}, \"message\": ", stdout);
     p101_report_json_string(env, err, stdout, p101_report_finding_name(finding->kind));
-    p101_fputs(env, err, ", \"evidence\": {\"event_schema\": \"p101-tool-event-format-v3\", \"resource_event\": ", stdout);
+    p101_fputs(env, err, ", \"evidence\": {\"event_schema\": \"" P101_TOOL_EVENT_SCHEMA_NAME "\", \"resource_event\": ", stdout);
     p101_printf(env, err, "%zu}, \"kind\": ", finding->sequence);
     p101_report_json_string(env, err, stdout, p101_report_finding_name(finding->kind));
     p101_printf(env, err, ", \"pid\": %ld", finding->pid);
@@ -277,19 +317,20 @@ static bool p101_report_finding_is_generic(enum finding_kind kind)
 
 void p101_report_print_json_trace_context(const struct p101_env *env, struct p101_error *err, const struct report_model *model, const struct finding *finding)
 {
-    const struct source_site *site;
-    size_t                    printed;
+    size_t printed;
+    size_t begin;
+    size_t end;
 
-    site    = &model->sites[finding->site];
     printed = 0;
+    p101_report_trace_bounds(env, model, finding, &begin, &end);
 
-    for(size_t i = 0; i < model->call_count && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); i++)
+    for(size_t i = begin; i != SIZE_MAX && i <= end && i < model->call_count && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); i++)
     {
         const struct call_event *call;
 
         call = &model->calls[i];
 
-        if(!p101_report_site_matches_call(env, site, call, finding->pid))
+        if(call->pid != finding->pid || call->context_id != finding->context_id)
         {
             continue;
         }
@@ -314,4 +355,62 @@ void p101_report_print_json_trace_context(const struct p101_env *env, struct p10
         p101_fputs(env, err, "}", stdout);
         printed++;
     }
+}
+
+static void p101_report_trace_bounds(const struct p101_env *env, const struct report_model *model, const struct finding *finding, size_t *begin, size_t *end)
+{
+    const struct source_site *site;
+    size_t                    best_sequence;
+
+    *begin        = SIZE_MAX;
+    *end          = SIZE_MAX;
+    best_sequence = 0U;
+    site          = &model->sites[finding->site];
+    for(size_t index = 0U; index < model->call_count; index++)
+    {
+        const struct call_event *call;
+
+        call = &model->calls[index];
+        if(call->kind == CALL_ENTER && call->event_sequence <= finding->event_sequence && call->event_sequence >= best_sequence && p101_report_site_matches_call(env, site, call, finding->pid, finding->context_id))
+        {
+            *begin        = index;
+            best_sequence = call->event_sequence;
+        }
+    }
+    if(*begin == SIZE_MAX)
+    {
+        return;
+    }
+
+    {
+        const char *call_name;
+        size_t      depth;
+
+        call_name = model->calls[*begin].call_name;
+        depth     = 0U;
+        for(size_t index = *begin; index < model->call_count; index++)
+        {
+            const struct call_event *call;
+
+            call = &model->calls[index];
+            if(call->pid != finding->pid || call->context_id != finding->context_id || p101_strcmp(env, call->call_name, call_name) != 0)
+            {
+                continue;
+            }
+            if(call->kind == CALL_ENTER)
+            {
+                depth++;
+            }
+            else if(depth > 0U)
+            {
+                depth--;
+                if(depth == 0U)
+                {
+                    *end = index;
+                    return;
+                }
+            }
+        }
+    }
+    *end = model->call_count == 0U ? SIZE_MAX : model->call_count - 1U;
 }

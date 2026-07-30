@@ -2,7 +2,7 @@
 # selects a fuzzer-capable clang and passes it as CMAKE_C_COMPILER. Separate
 # from the strict analysis build.
 #
-# TARGET: p101-report's argument parser and v2 line parser adapters. p101_exit() is
+# TARGET: p101-report's argument parser and current event parser adapters. p101_exit() is
 # redirected into a longjmp so usage paths are normal fuzz inputs, not process
 # exits.
 cmake_minimum_required(VERSION 3.14)

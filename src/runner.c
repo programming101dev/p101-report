@@ -12,7 +12,7 @@ int p101_report_run(const struct p101_env *env, struct p101_error *err, const st
     struct report_model model;
     int                 ret_val;
 
-    P101_TRACE(env);
+    P101_TRACE_SCOPE(env);
     p101_memset(env, &model, 0, sizeof(model));
     ret_val = EXIT_TROUBLE;
 
@@ -38,7 +38,15 @@ int p101_report_run(const struct p101_env *env, struct p101_error *err, const st
         goto done;
     }
 
-    ret_val = model.finding_count == 0 ? EXIT_CLEAN : EXIT_FINDINGS;
+    if(model.resource_malformed != 0U || model.call_malformed != 0U || model.resource_bad_version != 0U || model.call_bad_version != 0U || !p101_tool_event_stream_health_is_complete(&model.resource_stream_health) ||
+       !p101_tool_event_stream_health_is_complete(&model.call_stream_health))
+    {
+        ret_val = EXIT_TROUBLE;
+    }
+    else
+    {
+        ret_val = model.finding_count == 0U ? EXIT_CLEAN : EXIT_FINDINGS;
+    }
 
 done:
     p101_report_free_model(env, &model);

@@ -55,6 +55,10 @@ findings with trace context:
      #10 EXIT  p101_open(-) -> 3 at server.c:41 in open_config
 ```
 
+Both logs must contain a successful `P101COMPLETE` receipt.
+Missing receipts and producer write failures are reported as incomplete
+evidence and prevent a clean exit status. Older event formats are rejected.
+
 Use `-j` for the same report as JSON when another tool or grading script needs
 to consume the result. Use `-m` to render resource lifetimes as a Mermaid graph
 for Markdown viewers that support Mermaid.

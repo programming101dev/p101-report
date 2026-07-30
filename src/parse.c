@@ -31,6 +31,13 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
         goto done;
     }
 
+    (void)p101_tool_event_stream_health_observe(&model->resource_stream_health, &record);
+    if(record.record_kind == P101_TOOL_EVENT_RECORD_COMPLETE)
+    {
+        status = LINE_COMPLETE;
+        goto done;
+    }
+
     copy_resource_metadata(&record, event, sequence);
 
 #ifdef __clang__
@@ -120,6 +127,11 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             status = LINE_OTHER;
             break;
         }
+        case P101_TOOL_EVENT_RECORD_COMPLETE:
+        {
+            status = LINE_COMPLETE;
+            break;
+        }
         default:
         {
             status = LINE_MALFORMED;
@@ -139,7 +151,7 @@ done:
     return status;
 }
 
-enum line_status p101_report_parse_call_line(const struct p101_env *env, struct p101_error *err, char *line, struct call_event *event, size_t sequence)
+enum line_status p101_report_parse_call_line(const struct p101_env *env, struct p101_error *err, char *line, struct call_event *event, struct report_model *model, size_t sequence)
 {
     enum line_status              status;
     p101_tool_event_parse_status  parse_status;
@@ -147,7 +159,7 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
 
     status = LINE_MALFORMED;
 
-    if(line == NULL || event == NULL)
+    if(line == NULL || event == NULL || model == NULL)
     {
         goto done;
     }
@@ -157,6 +169,13 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
 
     if(status != LINE_OK)
     {
+        goto done;
+    }
+
+    (void)p101_tool_event_stream_health_observe(&model->call_stream_health, &record);
+    if(record.record_kind == P101_TOOL_EVENT_RECORD_COMPLETE)
+    {
+        status = LINE_COMPLETE;
         goto done;
     }
 
@@ -248,6 +267,7 @@ static void copy_resource_metadata(const struct p101_tool_event_record *record, 
 static void copy_call_metadata(const struct p101_tool_event_record *record, struct call_event *event, size_t sequence)
 {
     event->pid                    = record->pid;
+    event->context_id             = record->context_id;
     event->sequence               = sequence;
     event->event_sequence         = record->sequence;
     event->monotonic_ns           = record->monotonic_ns;

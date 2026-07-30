@@ -1,13 +1,13 @@
 #include "finding.h"
 #include <p101_c/p101_string.h>
 
-bool p101_report_site_matches_call(const struct p101_env *env, const struct source_site *site, const struct call_event *call, long pid)
+bool p101_report_site_matches_call(const struct p101_env *env, const struct source_site *site, const struct call_event *call, long pid, size_t context_id)
 {
     bool result;
 
     result = false;
 
-    if(call->pid != pid)
+    if(call->pid != pid || call->context_id != context_id)
     {
         goto done;
     }
