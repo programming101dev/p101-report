@@ -19,6 +19,7 @@
 
 static struct p101_error *error;
 static struct p101_env   *env;
+void                      p101_report_run_more_tests(void);
 
 void setUp(void)
 {
@@ -45,10 +46,10 @@ static void reset_getopt(void)
 
 static void test_parse_accepts_report_directory(void)
 {
-    char             *argv[] = {"p101-report", "run-report", NULL};
-    struct arguments  args;
-    char              resources[PATH_MAX_BYTES];
-    char              calls[PATH_MAX_BYTES];
+    char            *argv[] = {"p101-report", "run-report", NULL};
+    struct arguments args;
+    char             resources[PATH_MAX_BYTES];
+    char             calls[PATH_MAX_BYTES];
 
     reset_getopt();
     p101_memset(env, &args, 0, sizeof(args));
@@ -64,10 +65,10 @@ static void test_parse_accepts_report_directory(void)
 
 static void test_parse_accepts_explicit_logs(void)
 {
-    char             *argv[] = {"p101-report", "-j", "-r", "resources.log", "-c", "calls.log", NULL};
-    struct arguments  args;
-    char              resources[PATH_MAX_BYTES];
-    char              calls[PATH_MAX_BYTES];
+    char            *argv[] = {"p101-report", "-j", "-r", "resources.log", "-c", "calls.log", NULL};
+    struct arguments args;
+    char             resources[PATH_MAX_BYTES];
+    char             calls[PATH_MAX_BYTES];
 
     reset_getopt();
     p101_memset(env, &args, 0, sizeof(args));
@@ -84,10 +85,10 @@ static void test_parse_accepts_explicit_logs(void)
 
 static void test_parse_accepts_mermaid_output(void)
 {
-    char             *argv[] = {"p101-report", "-m", "-r", "resources.log", "-c", "calls.log", NULL};
-    struct arguments  args;
-    char              resources[PATH_MAX_BYTES];
-    char              calls[PATH_MAX_BYTES];
+    char            *argv[] = {"p101-report", "-m", "-r", "resources.log", "-c", "calls.log", NULL};
+    struct arguments args;
+    char             resources[PATH_MAX_BYTES];
+    char             calls[PATH_MAX_BYTES];
 
     reset_getopt();
     p101_memset(env, &args, 0, sizeof(args));
@@ -101,10 +102,10 @@ static void test_parse_accepts_mermaid_output(void)
 
 static void test_parse_rejects_missing_call_log(void)
 {
-    char             *argv[] = {"p101-report", "-r", "resources.log", NULL};
-    struct arguments  args;
-    char              resources[PATH_MAX_BYTES];
-    char              calls[PATH_MAX_BYTES];
+    char            *argv[] = {"p101-report", "-r", "resources.log", NULL};
+    struct arguments args;
+    char             resources[PATH_MAX_BYTES];
+    char             calls[PATH_MAX_BYTES];
 
     reset_getopt();
     p101_memset(env, &args, 0, sizeof(args));
@@ -252,10 +253,10 @@ static void test_generic_resource_balanced_lifecycle_has_no_finding(void)
 
 static void test_parse_call_line_accepts_exit(void)
 {
-    char              line[] = "P101CALL\t4\t42\t7\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
-    struct call_event event;
+    char                line[] = "P101CALL\t4\t42\t7\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
+    struct call_event   event;
     struct report_model model;
-    enum line_status  status;
+    enum line_status    status;
 
     p101_memset(env, &event, 0, sizeof(event));
     p101_memset(env, &model, 0, sizeof(model));
@@ -277,10 +278,10 @@ static void test_parse_call_line_accepts_exit(void)
 
 static void test_parse_call_line_rejects_old_exit(void)
 {
-    char              line[] = "P101CALL\t2\t42\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
-    struct call_event event;
+    char                line[] = "P101CALL\t2\t42\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
+    struct call_event   event;
     struct report_model model;
-    enum line_status  status;
+    enum line_status    status;
 
     p101_memset(env, &event, 0, sizeof(event));
     p101_memset(env, &model, 0, sizeof(model));
@@ -350,9 +351,9 @@ static void write_temp_bytes(char *path, size_t path_size, const char *bytes, si
 
 static void test_resource_reader_counts_embedded_nul_as_malformed(void)
 {
-    static const char      bytes[] = {'P', '1', '0', '1', 'F', 'D', '\t', '1', '\t', '4', '2', '\0', '\t', 'O', 'P', 'E', 'N', '\t', '3', '\t', '1', '7', '\t', 'm', 'a', 'i', 'n', '\t', 's', 'e', 'r', 'v', 'e', 'r', '.', 'c', '\n'};
-    char                   path[PATH_MAX_BYTES];
-    struct report_model    model;
+    static const char   bytes[] = {'P', '1', '0', '1', 'F', 'D', '\t', '1', '\t', '4', '2', '\0', '\t', 'O', 'P', 'E', 'N', '\t', '3', '\t', '1', '7', '\t', 'm', 'a', 'i', 'n', '\t', 's', 'e', 'r', 'v', 'e', 'r', '.', 'c', '\n'};
+    char                path[PATH_MAX_BYTES];
+    struct report_model model;
 
     p101_memset(env, &model, 0, sizeof(model));
     write_temp_bytes(path, sizeof(path), bytes, sizeof(bytes));
@@ -362,6 +363,26 @@ static void test_resource_reader_counts_embedded_nul_as_malformed(void)
     TEST_ASSERT_FALSE(p101_error_has_error(error));
     TEST_ASSERT_EQUAL_UINT64(0, model.resource_records);
     TEST_ASSERT_EQUAL_UINT64(1, model.resource_malformed);
+
+    p101_unlink(env, error, path);
+    p101_report_free_model(env, &model);
+}
+
+static void test_call_reader_counts_embedded_nul_as_malformed(void)
+{
+    static const char   bytes[] = {'P', '1', '0', '1', 'C', 'A',  'L', 'L',  '\t', '4', '\t', '4', '2',  '\0', '\t', '1', '\t', '1', '0', '0',  '\t', '2',  '0', '0', '\t',
+                                   'E', 'N', 'T', 'E', 'R', '\t', '1', '\t', 'm',  'a', 'i',  'n', '\t', 'm',  'a',  'i', 'n',  '.', 'c', '\t', '-',  '\t', '-', '\n'};
+    char                path[PATH_MAX_BYTES];
+    struct report_model model;
+
+    p101_memset(env, &model, 0, sizeof(model));
+    write_temp_bytes(path, sizeof(path), bytes, sizeof(bytes));
+
+    p101_report_read_calls(env, error, path, &model);
+
+    TEST_ASSERT_FALSE(p101_error_has_error(error));
+    TEST_ASSERT_EQUAL_UINT64(0, model.call_records);
+    TEST_ASSERT_EQUAL_UINT64(1, model.call_malformed);
 
     p101_unlink(env, error, path);
     p101_report_free_model(env, &model);
@@ -383,5 +404,7 @@ int main(void)
     RUN_TEST(test_parse_call_line_rejects_old_exit);
     RUN_TEST(test_failed_exec_removes_only_its_inheritance_findings);
     RUN_TEST(test_resource_reader_counts_embedded_nul_as_malformed);
+    RUN_TEST(test_call_reader_counts_embedded_nul_as_malformed);
+    p101_report_run_more_tests();
     return UNITY_END();
 }

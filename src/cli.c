@@ -19,17 +19,32 @@ void p101_report_arguments_init(const struct p101_env *env, struct arguments *ar
 void p101_report_parse_arguments(const struct p101_env *env, struct p101_error *err, int argc, char *argv[], struct arguments *args)
 {
     int opt;
+#ifdef P101_REPORT_TESTING
+    const char *forced_option;
+#endif
 
     P101_TRACE_SCOPE(env);
     opterr = 0;
+#ifdef P101_REPORT_TESTING
+    forced_option = getenv("P101_REPORT_TEST_OPTION");
+#endif
 
     if(argc == 2 && p101_strcmp(env, argv[1], "--help") == 0)
     {
         p101_report_usage(env, err, argv[0], EXIT_SUCCESS, NULL);
     }
 
-    while((opt = p101_getopt(env, argc, argv, ":hvjmd:r:c:")) != -1 && p101_error_has_no_error(err))
+    while(
+#ifdef P101_REPORT_TESTING
+        (opt = (forced_option == NULL) ? p101_getopt(env, argc, argv, ":hvjmd:r:c:") : (unsigned char)*forced_option) != -1 &&
+#else
+        (opt = p101_getopt(env, argc, argv, ":hvjmd:r:c:")) != -1 &&
+#endif
+        p101_error_has_no_error(err))
     {
+#ifdef P101_REPORT_TESTING
+        forced_option = NULL;
+#endif
         switch(opt)
         {
             case 'h':
@@ -155,13 +170,13 @@ void p101_report_check_arguments(const struct p101_env *env, struct p101_error *
         args->call_log = call_buf;
     }
 
-    if(args->resource_log == NULL || args->resource_log[0] == '\0')
+    if(args->resource_log[0] == '\0')
     {
         P101_ERROR_RAISE_USER(err, "The resource log path must not be empty.", ERR_USAGE);
         goto done;
     }
 
-    if(args->call_log == NULL || args->call_log[0] == '\0')
+    if(args->call_log[0] == '\0')
     {
         P101_ERROR_RAISE_USER(err, "The call log path must not be empty.", ERR_USAGE);
         goto done;

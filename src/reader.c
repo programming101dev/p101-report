@@ -50,7 +50,7 @@ void p101_report_read_resources(const struct p101_env *env, struct p101_error *e
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #endif
-        switch(status)
+        switch(status)    // GCOVR_EXCL_BR_LINE -- exhaustive parser status; default is defensive.
         {
             case LINE_OTHER:
             {
@@ -77,11 +77,13 @@ void p101_report_read_resources(const struct p101_env *env, struct p101_error *e
                 model->resource_bad_version++;
                 break;
             }
+            // GCOVR_EXCL_START -- the parser returns only the exhaustive statuses above.
             default:
             {
                 model->resource_malformed++;
                 break;
             }
+                // GCOVR_EXCL_STOP
         }
 #ifdef __clang__
     #pragma clang diagnostic pop
@@ -133,7 +135,7 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #endif
-        switch(status)
+        switch(status)    // GCOVR_EXCL_BR_LINE -- exhaustive parser status; default is defensive.
         {
             case LINE_OTHER:
             {
@@ -161,11 +163,13 @@ void p101_report_read_calls(const struct p101_env *env, struct p101_error *err, 
                 model->call_bad_version++;
                 break;
             }
+            // GCOVR_EXCL_START -- the parser returns only the exhaustive statuses above.
             default:
             {
                 model->call_malformed++;
                 break;
             }
+                // GCOVR_EXCL_STOP
         }
 #ifdef __clang__
     #pragma clang diagnostic pop

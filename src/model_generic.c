@@ -6,6 +6,9 @@ static enum finding_kind            p101_report_generic_finding_kind(const struc
 static enum finding_kind            p101_report_unknown_generic_finding_kind(void);
 static size_t                       p101_report_find_generic_sequence(const struct p101_env *env, const struct report_model *model, const struct p101_tool_event_lifecycle_finding *finding, bool previous);
 static const struct resource_event *p101_report_find_lifecycle_event(const struct report_model *model, const struct p101_tool_event_lifecycle_finding *finding);
+#ifdef P101_REPORT_TESTING
+static int p101_report_test_generic_fault;
+#endif
 
 void p101_report_ingest_generic(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event)
 {
@@ -14,7 +17,18 @@ void p101_report_ingest_generic(const struct p101_env *env, struct p101_error *e
 
     if(model->generic_lifecycle == NULL)
     {
-        model->generic_lifecycle = p101_tool_event_lifecycle_create(err);
+#ifdef P101_REPORT_TESTING
+        if(p101_report_test_generic_fault == 1)
+        {
+            P101_ERROR_RAISE_CHECK(err);
+            goto done;
+        }
+#endif
+        model->generic_lifecycle =
+#ifdef P101_REPORT_TESTING
+            p101_report_test_generic_fault == 4 ? NULL :
+#endif
+                                                  p101_tool_event_lifecycle_create(err);
         if(model->generic_lifecycle == NULL)
         {
             goto done;
@@ -89,13 +103,19 @@ done:
 void p101_report_finalize_generic(const struct p101_env *env, struct p101_error *err, struct report_model *model)
 {
     size_t count;
+    int    finish_result;
 
     if(model->generic_lifecycle == NULL || model->generic_finalized != 0)
     {
         goto done;
     }
 
-    if(p101_tool_event_lifecycle_finish(err, model->generic_lifecycle) != 0)
+    finish_result =
+#ifdef P101_REPORT_TESTING
+        p101_report_test_generic_fault == 2 ? -1 :
+#endif
+                                              p101_tool_event_lifecycle_finish(err, model->generic_lifecycle);
+    if(finish_result != 0)
     {
         goto done;
     }
@@ -106,7 +126,11 @@ void p101_report_finalize_generic(const struct p101_env *env, struct p101_error 
         const struct p101_tool_event_lifecycle_finding *source;
         struct finding                                  finding;
 
-        source = p101_tool_event_lifecycle_finding_at(model->generic_lifecycle, index);
+        source =
+#ifdef P101_REPORT_TESTING
+            (p101_report_test_generic_fault == 3) ? NULL :
+#endif
+                                                    p101_tool_event_lifecycle_finding_at(model->generic_lifecycle, index);
         if(source == NULL)
         {
             P101_ERROR_RAISE_CHECK(err);
@@ -231,6 +255,33 @@ static enum finding_kind p101_report_unknown_generic_finding_kind(void)
 {
     return FINDING_RESOURCE_BAD_REPLACE;
 }
+
+#ifdef P101_REPORT_TESTING
+enum finding_kind p101_report_test_generic_finding_kind(const struct p101_env *env, p101_tool_event_lifecycle_finding_kind kind, char *resource_class)
+{
+    struct p101_tool_event_lifecycle_finding finding;
+
+    p101_memset(env, &finding, 0, sizeof(finding));
+    finding.kind           = kind;
+    finding.resource_class = resource_class;
+    return p101_report_generic_finding_kind(env, &finding);
+}
+
+void p101_report_test_set_generic_fault(int fault)
+{
+    p101_report_test_generic_fault = fault;
+}
+
+size_t p101_report_test_find_generic_sequence(const struct p101_env *env, const struct report_model *model, const struct p101_tool_event_lifecycle_finding *finding, bool previous)
+{
+    return p101_report_find_generic_sequence(env, model, finding, previous);
+}
+
+const struct resource_event *p101_report_test_find_lifecycle_event(const struct report_model *model, const struct p101_tool_event_lifecycle_finding *finding)
+{
+    return p101_report_find_lifecycle_event(model, finding);
+}
+#endif
 
 static size_t p101_report_find_generic_sequence(const struct p101_env *env, const struct report_model *model, const struct p101_tool_event_lifecycle_finding *finding, bool previous)
 {

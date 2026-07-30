@@ -24,7 +24,7 @@ FILE *p101_report_open_input(const struct p101_env *env, struct p101_error *err,
     stream = NULL;
     *owned = false;
 
-    if(path != NULL && p101_strcmp(env, path, "-") == 0)
+    if(p101_strcmp(env, path, "-") == 0)
     {
         stream = stdin;
     }

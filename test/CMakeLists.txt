@@ -52,13 +52,46 @@ endfunction()
 
 p101_add_test(test_arguments
     test_arguments.c
+    test_more.c
     ../src/cli.c
     ../src/finding.c
     ../src/io.c
+    ../src/json.c
+    ../src/lifetime.c
+    ../src/lifetime_common.c
+    ../src/lifetime_mermaid.c
     ../src/memory.c
     ../src/model.c
     ../src/model_generic.c
     ../src/model_support.c
+    ../src/output.c
     ../src/parse.c
     ../src/reader.c
+    ../src/runner.c
 )
+target_compile_definitions(test_arguments PRIVATE P101_REPORT_TESTING=1)
+
+add_executable(p101_report_coverage_cli
+    ../src/cli.c
+    ../src/finding.c
+    ../src/io.c
+    ../src/json.c
+    ../src/lifetime.c
+    ../src/lifetime_common.c
+    ../src/lifetime_mermaid.c
+    ../src/main.c
+    ../src/memory.c
+    ../src/model.c
+    ../src/model_generic.c
+    ../src/model_support.c
+    ../src/output.c
+    ../src/parse.c
+    ../src/reader.c
+    ../src/runner.c
+)
+target_include_directories(p101_report_coverage_cli PRIVATE ${_P101_INC_DIRS} "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+target_link_libraries(p101_report_coverage_cli PRIVATE ${_P101_RESOLVED} m)
+target_compile_options(p101_report_coverage_cli PRIVATE ${_COV})
+target_link_options(p101_report_coverage_cli PRIVATE ${_COV})
+target_compile_definitions(p101_report_coverage_cli PRIVATE P101_REPORT_TESTING=1)
+add_test(NAME test_cli COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_cli.sh" "$<TARGET_FILE:p101_report_coverage_cli>")

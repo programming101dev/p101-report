@@ -44,7 +44,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wcovered-switch-default"
 #endif
-    switch(record.record_kind)
+    switch(record.record_kind)    // GCOVR_EXCL_BR_LINE -- validated protocol record kinds are exhaustive.
     {
         case P101_TOOL_EVENT_RECORD_FD:
         {
@@ -114,12 +114,9 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             {
                 event->related_id = p101_report_dup_text(env, err, record.related_id);
             }
-            if(record.metadata != NULL)
-            {
-                event->metadata = p101_report_dup_text(env, err, record.metadata);
-            }
-            event->size = record.size;
-            event->site = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
+            event->metadata = p101_report_dup_text(env, err, record.metadata);
+            event->size     = record.size;
+            event->site     = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
         case P101_TOOL_EVENT_RECORD_CALL:
@@ -127,6 +124,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             status = LINE_OTHER;
             break;
         }
+        // GCOVR_EXCL_START -- COMPLETE returned above; validated records cannot have another kind.
         case P101_TOOL_EVENT_RECORD_COMPLETE:
         {
             status = LINE_COMPLETE;
@@ -137,6 +135,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             status = LINE_MALFORMED;
             break;
         }
+            // GCOVR_EXCL_STOP
     }
 #ifdef __clang__
     #pragma clang diagnostic pop
@@ -275,3 +274,10 @@ static void copy_call_metadata(const struct p101_tool_event_record *record, stru
     event->monotonic_ns_available = record->monotonic_ns_available;
     event->wall_unix_ns_available = record->wall_unix_ns_available;
 }
+
+#ifdef P101_REPORT_TESTING
+enum line_status p101_report_test_map_parse_status(p101_tool_event_parse_status status)
+{
+    return map_parse_status(status);
+}
+#endif

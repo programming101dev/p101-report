@@ -65,6 +65,13 @@ static const char *p101_report_generic_birth_id(const struct resource_event *bir
     return birth->related_id;
 }
 
+#ifdef P101_REPORT_TESTING
+const char *p101_report_test_generic_operation_name(p101_tool_event_resource_kind kind)
+{
+    return p101_report_generic_operation_name(kind);
+}
+#endif
+
 static void p101_report_print_text_timeline(const struct p101_env *env, struct p101_error *err, const char *label, const struct resource_event *birth, const struct resource_event *death)
 {
     p101_printf(env, err, "     timeline: event %zu %s", birth->event_sequence, label);

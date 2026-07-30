@@ -225,7 +225,7 @@ void p101_report_print_trace_context(const struct p101_env *env, struct p101_err
     p101_report_trace_bounds(env, model, finding, &begin, &end);
 
     p101_printf(env, err, "   trace:\n");
-    for(index = begin; index != SIZE_MAX && index <= end && index < model->call_count && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); index++)
+    for(index = begin; index != SIZE_MAX && index <= end && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); index++)
     {
         const struct call_event *call;
 
@@ -324,7 +324,7 @@ void p101_report_print_json_trace_context(const struct p101_env *env, struct p10
     printed = 0;
     p101_report_trace_bounds(env, model, finding, &begin, &end);
 
-    for(size_t i = begin; i != SIZE_MAX && i <= end && i < model->call_count && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); i++)
+    for(size_t i = begin; i != SIZE_MAX && i <= end && printed < TRACE_CONTEXT_LIMIT && p101_error_has_no_error(err); i++)
     {
         const struct call_event *call;
 
@@ -401,7 +401,7 @@ static void p101_report_trace_bounds(const struct p101_env *env, const struct re
             {
                 depth++;
             }
-            else if(depth > 0U)
+            else
             {
                 depth--;
                 if(depth == 0U)
@@ -412,5 +412,5 @@ static void p101_report_trace_bounds(const struct p101_env *env, const struct re
             }
         }
     }
-    *end = model->call_count == 0U ? SIZE_MAX : model->call_count - 1U;
+    *end = model->call_count - 1U;
 }

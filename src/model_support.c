@@ -6,6 +6,15 @@
 #include <p101_c/p101_string.h>
 #include <stdint.h>
 
+#ifdef P101_REPORT_TESTING
+static size_t p101_report_test_grow_failure_countdown;
+
+void p101_report_test_set_grow_failure_countdown(size_t countdown)
+{
+    p101_report_test_grow_failure_countdown = countdown;
+}
+#endif
+
 size_t p101_report_intern_site(const struct p101_env *env, struct p101_error *err, struct report_model *model, const char *file_name, const char *function_name, int line_number)
 {
     size_t index;
@@ -88,6 +97,18 @@ bool p101_report_grow_array_internal(const struct p101_env *env, struct p101_err
     void  *new_items;
 
     ok = true;
+#ifdef P101_REPORT_TESTING
+    if(p101_report_test_grow_failure_countdown > 0U)
+    {
+        p101_report_test_grow_failure_countdown--;
+        if(p101_report_test_grow_failure_countdown == 0U)
+        {
+            P101_ERROR_RAISE_CHECK(err);
+            ok = false;
+            goto done;
+        }
+    }
+#endif
     if(count < *capacity)
     {
         goto done;

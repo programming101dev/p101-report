@@ -8,6 +8,8 @@
 #include <stdint.h>
 
 static void p101_report_add_resource_event(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event);
+static bool p101_report_exec_attempt_matches(const struct p101_env *env, const struct resource_event *candidate, const struct resource_event *event);
+static bool p101_report_exec_finding_matches(const struct p101_env *env, const struct finding *finding, const struct resource_event *event, size_t first_sequence);
 static void p101_report_finish_exec(const struct p101_env *env, struct p101_error *err, struct report_model *model, long pid, bool end_of_input);
 static void p101_report_rollback_failed_exec(const struct p101_env *env, struct report_model *model, const struct resource_event *event);
 #include <p101_c/p101_stdlib.h>
@@ -25,6 +27,10 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
         p101_report_finish_exec(env, err, model, event->pid, false);
     }
     p101_report_add_resource_event(env, err, model, event);
+    if(p101_error_has_error(err))
+    {
+        goto done;
+    }
     if(event->kind == RESOURCE_FD_OPEN || event->kind == RESOURCE_FD_CLOSE || event->kind == RESOURCE_ALLOC || event->kind == RESOURCE_FREE || event->kind == RESOURCE_REALLOC || event->kind == RESOURCE_FORK || event->kind == RESOURCE_EXEC ||
        event->kind == RESOURCE_EXEC_FAIL || event->kind == RESOURCE_GENERIC)
     {
@@ -251,6 +257,9 @@ void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *
 #ifdef __clang__
     #pragma clang diagnostic pop
 #endif
+
+done:
+    return;
 }
 
 void p101_report_finalize_leaks(const struct p101_env *env, struct p101_error *err, struct report_model *model)
@@ -330,9 +339,8 @@ static void p101_report_rollback_failed_exec(const struct p101_env *env, struct 
     first_sequence = event->sequence;
     if(model->resource_count == 0U)
     {
-        return;
+        goto done;
     }
-
     for(read_index = 0U; read_index < model->fd_count; read_index++)
     {
         if(model->fds[read_index].pid == event->pid && model->fds[read_index].exec_pending != 0)
@@ -356,7 +364,7 @@ static void p101_report_rollback_failed_exec(const struct p101_env *env, struct 
         const struct resource_event *candidate;
 
         candidate = &model->resources[read_index - 1U];
-        if(candidate->kind != RESOURCE_EXEC || candidate->pid != event->pid || candidate->site != event->site || candidate->target == NULL || event->target == NULL || p101_strcmp(env, candidate->target, event->target) != 0)
+        if(!p101_report_exec_attempt_matches(env, candidate, event))
         {
             break;
         }
@@ -370,7 +378,7 @@ static void p101_report_rollback_failed_exec(const struct p101_env *env, struct 
         struct finding *finding;
 
         finding = &model->findings[read_index];
-        if(finding->kind == FINDING_EXEC_INHERIT && finding->pid == event->pid && finding->sequence >= first_sequence && finding->ptr != NULL && event->target != NULL && p101_strcmp(env, finding->ptr, event->target) == 0)
+        if(p101_report_exec_finding_matches(env, finding, event, first_sequence))
         {
             p101_free(env, finding->ptr);
             continue;
@@ -383,7 +391,37 @@ static void p101_report_rollback_failed_exec(const struct p101_env *env, struct 
         write_index++;
     }
     model->finding_count = write_index;
+
+done:
+    return;
 }
+
+static bool p101_report_exec_attempt_matches(const struct p101_env *env, const struct resource_event *candidate, const struct resource_event *event)
+{
+    return (candidate->kind == RESOURCE_EXEC && candidate->pid == event->pid && candidate->site == event->site && candidate->target != NULL && event->target != NULL && p101_strcmp(env, candidate->target, event->target) == 0) != 0;
+}
+
+static bool p101_report_exec_finding_matches(const struct p101_env *env, const struct finding *finding, const struct resource_event *event, size_t first_sequence)
+{
+    return (finding->kind == FINDING_EXEC_INHERIT && finding->pid == event->pid && finding->sequence >= first_sequence && finding->ptr != NULL && event->target != NULL && p101_strcmp(env, finding->ptr, event->target) == 0) != 0;
+}
+
+#ifdef P101_REPORT_TESTING
+void p101_report_test_rollback_failed_exec(const struct p101_env *env, struct report_model *model, const struct resource_event *event)
+{
+    p101_report_rollback_failed_exec(env, model, event);
+}
+
+bool p101_report_test_exec_attempt_matches(const struct p101_env *env, const struct resource_event *candidate, const struct resource_event *event)
+{
+    return p101_report_exec_attempt_matches(env, candidate, event);
+}
+
+bool p101_report_test_exec_finding_matches(const struct p101_env *env, const struct finding *finding, const struct resource_event *event, size_t first_sequence)
+{
+    return p101_report_exec_finding_matches(env, finding, event, first_sequence);
+}
+#endif
 
 static void p101_report_add_resource_event(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event)
 {
