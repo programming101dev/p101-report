@@ -1,7 +1,9 @@
 #ifndef P101_REPORT_TYPES_H
 #define P101_REPORT_TYPES_H
 
+#include <p101_tool_event/event.h>
 #include <p101_tool_event/lifecycle.h>
+#include <p101_tool_event/model.h>
 #include <stddef.h>
 
 enum resource_kind
@@ -189,7 +191,8 @@ struct report_model
     size_t          finding_capacity;
 
     struct p101_tool_event_lifecycle_model *generic_lifecycle;
-    int                          generic_finalized;
+    struct p101_tool_model                 *run_model;
+    int                                     generic_finalized;
 
     size_t resource_records;
     size_t call_records;

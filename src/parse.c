@@ -37,6 +37,16 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
         status = LINE_COMPLETE;
         goto done;
     }
+    if(record.record_kind == P101_TOOL_EVENT_RECORD_CALL)
+    {
+        status = LINE_OTHER;
+        goto done;
+    }
+    if(model->run_model != NULL && p101_tool_model_ingest(err, model->run_model, &record) != 0)
+    {
+        status = LINE_MALFORMED;
+        goto done;
+    }
 
     copy_resource_metadata(&record, event, sequence);
 
@@ -181,6 +191,11 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
     if(record.record_kind != P101_TOOL_EVENT_RECORD_CALL)
     {
         status = LINE_OTHER;
+        goto done;
+    }
+    if(model->run_model != NULL && p101_tool_model_ingest(err, model->run_model, &record) != 0)
+    {
+        status = LINE_MALFORMED;
         goto done;
     }
 

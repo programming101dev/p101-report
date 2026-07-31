@@ -62,6 +62,9 @@ expect 1 -b "$work" "$work"
 test -s "$work/correlated-report.txt"
 test -s "$work/correlated-report.json"
 test -s "$work/resource-lifetimes.md"
+test -s "$work/run-model.json"
+grep -q '"schema": "p101-run-model-v1"' "$work/run-model.json"
+grep -q '"kind":"call-return"' "$work/run-model.json"
 expect 1 -r "$work/resources.log" -c "$work/calls.log"
 
 cat >"$work/clean-resources.log" <<'LOG'

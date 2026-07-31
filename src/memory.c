@@ -53,6 +53,7 @@ void p101_report_free_model(const struct p101_env *env, struct report_model *mod
     }
     p101_free(env, model->findings);
     p101_tool_event_lifecycle_destroy(&model->generic_lifecycle);
+    p101_tool_model_destroy(&model->run_model);
     p101_tool_event_stream_health_destroy(&model->resource_stream_health);
     p101_tool_event_stream_health_destroy(&model->call_stream_health);
 }

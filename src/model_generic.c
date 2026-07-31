@@ -124,6 +124,7 @@ void p101_report_finalize_generic(const struct p101_env *env, struct p101_error 
     for(size_t index = 0U; index < count && p101_error_has_no_error(err); index++)
     {
         const struct p101_tool_event_lifecycle_finding *source;
+        const struct resource_event                    *resource_event;
         struct finding                                  finding;
 
         source =
@@ -138,7 +139,6 @@ void p101_report_finalize_generic(const struct p101_env *env, struct p101_error 
         }
 
         p101_memset(env, &finding, 0, sizeof(finding));
-        const struct resource_event *resource_event;
 
         finding.kind           = p101_report_generic_finding_kind(env, source);
         finding.pid            = source->pid;

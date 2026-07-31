@@ -1,5 +1,11 @@
 # p101-report
 
+> **Workflow role:** this binary is the standalone correlated-report reference
+> implementation. The ordinary `p101 analyze` workflow builds one shared run
+> model and `p101 report ANALYSIS_DIR` renders its correlated view without
+> reparsing the event streams. Use `p101 report-events` only for direct
+> protocol/parity debugging.
+
 `p101-report` reads the two logs produced by the p101 observer workflow and
 turns them into one correlated story:
 
@@ -113,3 +119,11 @@ replayable evidence from those logs, not proof about unobserved executions.
 ./change-compiler.sh -c clang
 ./check.sh
 ```
+## Canonical run model
+
+Bundle mode also writes `run-model.json` using the
+`p101-run-model-v1` contract. It contains deterministic call/resource nodes,
+the admitted call arguments and results, resource lifecycle metadata, and
+explicit call-parent, call-return, call-caused-event, resource-lifetime, and
+child-process edges. It is policy-free: finding severity and teaching advice
+remain in the specialized reports.

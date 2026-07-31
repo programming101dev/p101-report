@@ -6,6 +6,7 @@
 #include "output.h"
 #include "reader.h"
 #include <p101_c/p101_string.h>
+#include <p101_tool_event/model.h>
 #include <stdlib.h>
 
 int p101_report_run(const struct p101_env *env, struct p101_error *err, const struct arguments *args)
@@ -15,12 +16,21 @@ int p101_report_run(const struct p101_env *env, struct p101_error *err, const st
 
     P101_TRACE_SCOPE(env);
     p101_memset(env, &model, 0, sizeof(model));
-    ret_val = EXIT_TROUBLE;
+    ret_val         = EXIT_TROUBLE;
+    model.run_model = p101_tool_model_create(err);
+    if(model.run_model == NULL)
+    {
+        goto done;
+    }
 
     p101_report_read_resources(env, err, args->resource_log, &model);
     p101_report_read_calls(env, err, args->call_log, &model);
 
     if(p101_error_has_error(err))
+    {
+        goto done;
+    }
+    if(p101_tool_model_finish(err, model.run_model) != 0)
     {
         goto done;
     }
