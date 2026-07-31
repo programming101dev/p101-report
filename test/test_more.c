@@ -19,8 +19,6 @@
 #include <p101_c/p101_string.h>
 #include <p101_env/env.h>
 #include <p101_error/error.h>
-#include <p101_posix/p101_stdlib.h>
-#include <p101_posix/p101_unistd.h>
 #include <p101_tool_event/event.h>
 #include <stdint.h>
 
@@ -146,6 +144,10 @@ static void test_parse_statuses_and_cross_stream_records(void)
     char                  complete_resource[] = "P101COMPLETE\t4\t1\t1\t3\t12\t22\t2\t0\t0\n";
     char                  complete_call[]     = "P101COMPLETE\t4\t1\t1\t3\t12\t22\t2\t0\t0\n";
     char                  null_call[]         = "P101CALL\t4\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
+    char                  rejected_fd_line[]  = "P101FD\t4\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
+    char                  rejected_call_line[] = "P101CALL\t4\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
+    char                  finished_fd_line[] = "P101FD\t4\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
+    char                  finished_call_line[] = "P101CALL\t4\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
 
     p101_memset(more_env, &model, 0, sizeof(model));
     p101_memset(more_env, &resource, 0, sizeof(resource));
@@ -165,6 +167,28 @@ static void test_parse_statuses_and_cross_stream_records(void)
     TEST_ASSERT_EQUAL_INT(LINE_BAD_VERSION, p101_report_test_map_parse_status(P101_TOOL_EVENT_PARSE_BAD_VERSION));
     TEST_ASSERT_EQUAL_INT(LINE_MALFORMED, p101_report_test_map_parse_status(P101_TOOL_EVENT_PARSE_MALFORMED));
     TEST_ASSERT_EQUAL_INT(LINE_MALFORMED, p101_report_test_map_parse_status((p101_tool_event_parse_status)999));
+    p101_report_free_model(more_env, &model);
+
+    p101_memset(more_env, &model, 0, sizeof(model));
+    model.run_model = p101_tool_model_create(more_error);
+    TEST_ASSERT_NOT_NULL(model.run_model);
+    TEST_ASSERT_EQUAL_INT(LINE_OK, p101_report_parse_resource_line(more_env, more_error, rejected_fd_line, &resource, &model, 1U));
+    p101_report_free_model(more_env, &model);
+
+    p101_memset(more_env, &model, 0, sizeof(model));
+    model.run_model = p101_tool_model_create(more_error);
+    TEST_ASSERT_NOT_NULL(model.run_model);
+    TEST_ASSERT_EQUAL_INT(LINE_OK, p101_report_parse_call_line(more_env, more_error, rejected_call_line, &call, &model, 1U));
+    p101_report_free_model(more_env, &model);
+
+    p101_memset(more_env, &model, 0, sizeof(model));
+    model.run_model = p101_tool_model_create(more_error);
+    TEST_ASSERT_NOT_NULL(model.run_model);
+    TEST_ASSERT_EQUAL_INT(0, p101_tool_model_finish(more_error, model.run_model));
+    TEST_ASSERT_EQUAL_INT(LINE_MALFORMED, p101_report_parse_resource_line(more_env, more_error, finished_fd_line, &resource, &model, 1U));
+    p101_error_reset(more_error);
+    TEST_ASSERT_EQUAL_INT(LINE_MALFORMED, p101_report_parse_call_line(more_env, more_error, finished_call_line, &call, &model, 1U));
+    p101_error_reset(more_error);
     p101_report_free_model(more_env, &model);
 }
 

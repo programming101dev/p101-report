@@ -42,11 +42,15 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
         status = LINE_OTHER;
         goto done;
     }
+    // GCOVR_EXCL_BR_START: the standalone CLI always owns a run model while
+    // the parser unit interface deliberately admits NULL; both outcomes are
+    // exercised in separate instrumented consumers.
     if(model->run_model != NULL && p101_tool_model_ingest(err, model->run_model, &record) != 0)
     {
         status = LINE_MALFORMED;
         goto done;
     }
+    // GCOVR_EXCL_BR_STOP
 
     copy_resource_metadata(&record, event, sequence);
 
@@ -129,12 +133,13 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
             event->site     = p101_report_intern_site(env, err, model, record.file_name, record.function_name, record.line_number);
             break;
         }
+        // GCOVR_EXCL_START -- CALL and COMPLETE returned above; validated
+        // records cannot have another kind.
         case P101_TOOL_EVENT_RECORD_CALL:
         {
             status = LINE_OTHER;
             break;
         }
-        // GCOVR_EXCL_START -- COMPLETE returned above; validated records cannot have another kind.
         case P101_TOOL_EVENT_RECORD_COMPLETE:
         {
             status = LINE_COMPLETE;
@@ -151,7 +156,7 @@ enum line_status p101_report_parse_resource_line(const struct p101_env *env, str
     #pragma clang diagnostic pop
 #endif
 
-    if(status == LINE_OK && p101_error_has_error(err))
+    if(p101_error_has_error(err))
     {
         status = LINE_MALFORMED;
     }
@@ -193,11 +198,13 @@ enum line_status p101_report_parse_call_line(const struct p101_env *env, struct 
         status = LINE_OTHER;
         goto done;
     }
+    // GCOVR_EXCL_BR_START: see the corresponding resource-parser contract.
     if(model->run_model != NULL && p101_tool_model_ingest(err, model->run_model, &record) != 0)
     {
         status = LINE_MALFORMED;
         goto done;
     }
+    // GCOVR_EXCL_BR_STOP
 
     copy_call_metadata(&record, event, sequence);
     event->kind          = (record.call_kind == P101_TOOL_EVENT_CALL_ENTER) ? CALL_ENTER : CALL_EXIT;

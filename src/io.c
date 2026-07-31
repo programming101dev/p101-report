@@ -1,5 +1,6 @@
 #include "io.h"
 #include "constants.h"
+#include <errno.h>
 #include <p101_c/p101_stdio.h>
 #include <p101_c/p101_string.h>
 #include <stdio.h>
@@ -40,14 +41,27 @@ FILE *p101_report_open_input(const struct p101_env *env, struct p101_error *err,
 void p101_report_join_path(const struct p101_env *env, struct p101_error *err, char *out, size_t out_size, const char *dir, const char *leaf)
 {
     size_t dir_len;
+    int    written;
 
     dir_len = p101_strlen(env, dir);
     if(dir_len > 0U && dir[dir_len - 1U] == '/')
     {
-        p101_snprintf(env, err, out, out_size, "%s%s", dir, leaf);
+        written = p101_snprintf(env, err, out, out_size, "%s%s", dir, leaf);
     }
     else
     {
-        p101_snprintf(env, err, out, out_size, "%s/%s", dir, leaf);
+        written = p101_snprintf(env, err, out, out_size, "%s/%s", dir, leaf);
+    }
+    // GCOVR_EXCL_START: a negative p101_snprintf result is a wrapper-level
+    // failure; truncation remains a directly tested admitted input.
+    if(written < 0)
+    {
+        P101_ERROR_RAISE_ERRNO(err, EIO);
+        return;
+    }
+    // GCOVR_EXCL_STOP
+    if((size_t)written >= out_size)
+    {
+        P101_ERROR_RAISE_ERRNO(err, ENAMETOOLONG);
     }
 }

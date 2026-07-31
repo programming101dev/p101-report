@@ -16,7 +16,7 @@ if (P101_TEST_COVERAGE)
     set(_COV --coverage)
 endif ()
 
-set(P101_LIBS p101_error p101_tool_event p101_env p101_c p101_posix)
+set(P101_LIBS p101_error p101_tool_event p101_env p101_c p101_cli p101_filesystem p101_io p101_process p101_text)
 set(P101_PUBLIC_INCLUDE_DIRS "" CACHE STRING "Extra p101 include dirs")
 set(P101_PUBLIC_LINK_DIRS "" CACHE STRING "Extra p101 link dirs")
 separate_arguments(P101_PUBLIC_INCLUDE_DIRS_LIST NATIVE_COMMAND "${P101_PUBLIC_INCLUDE_DIRS}")
@@ -53,7 +53,6 @@ endfunction()
 p101_add_test(test_arguments
     test_arguments.c
     test_more.c
-    ../src/bundle.c
     ../src/cli.c
     ../src/finding.c
     ../src/io.c
@@ -68,7 +67,6 @@ p101_add_test(test_arguments
     ../src/output.c
     ../src/parse.c
     ../src/reader.c
-    ../src/runner.c
 )
 target_compile_definitions(test_arguments PRIVATE P101_REPORT_TESTING=1)
 

@@ -1,7 +1,7 @@
 #include "memory.h"
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
-#include <p101_posix/p101_string.h>
+#include <p101_text/text.h>
 
 char *p101_report_dup_text(const struct p101_env *env, struct p101_error *err, const char *text)
 {

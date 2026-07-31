@@ -14,7 +14,6 @@ static void p101_report_finish_exec(const struct p101_env *env, struct p101_erro
 static void p101_report_rollback_failed_exec(const struct p101_env *env, struct report_model *model, const struct resource_event *event);
 #include <p101_c/p101_stdlib.h>
 #include <p101_c/p101_string.h>
-#include <p101_posix/p101_string.h>
 #include <stdlib.h>
 
 void p101_report_ingest_resource(const struct p101_env *env, struct p101_error *err, struct report_model *model, const struct resource_event *event)

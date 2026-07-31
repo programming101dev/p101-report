@@ -31,6 +31,10 @@ P101COMPLETE	4	123	7	3	130	230	2	0	0
 LOG
 
 expect 0 --help
+expect 2 -r /dev/null -c /dev/null
+P101_REPORT_TEST_FAIL_MODEL_CREATE=1 expect 2 -r /dev/null -c /dev/null
+P101_REPORT_TEST_FAIL_MODEL_FINISH=1 expect 2 -r /dev/null -c /dev/null
+P101_REPORT_TEST_FAIL_INGEST=1 expect 2 -r "$work/resources.log" -c "$work/calls.log"
 expect 0 -h
 expect 2
 expect 2 -Z
@@ -74,6 +78,16 @@ P101COMPLETE	4	123	7	3	130	230	2	0	0
 LOG
 expect 0 -r "$work/clean-resources.log" -c "$work/calls.log"
 expect 0 -j -r "$work/clean-resources.log" -c "$work/calls.log"
+
+mkdir "$work/fault-open" "$work/fault-dup" "$work/fault-dup2"
+P101_FAULT_CALL=1 P101_FAULT_NAME=open P101_FAULT_ERRNO=5 expect 2 -b "$work/fault-open" -r "$work/clean-resources.log" -c "$work/calls.log"
+P101_FAULT_CALL=1 P101_FAULT_NAME=dup P101_FAULT_ERRNO=5 expect 2 -b "$work/fault-dup" -r "$work/clean-resources.log" -c "$work/calls.log"
+P101_FAULT_CALL=1 P101_FAULT_NAME=dup2 P101_FAULT_ERRNO=5 expect 2 -b "$work/fault-dup2" -r "$work/clean-resources.log" -c "$work/calls.log"
+mkdir "$work/fault-fopen"
+P101_FAULT_CALL=3 P101_FAULT_NAME=fopen P101_FAULT_ERRNO=5 expect 2 -b "$work/fault-fopen" -r "$work/clean-resources.log" -c "$work/calls.log"
+long_bundle=$work/
+while [ "${#long_bundle}" -lt 5000 ]; do long_bundle="${long_bundle}long-path-segment/"; done
+expect 2 -b "$long_bundle" -r "$work/clean-resources.log" -c "$work/calls.log"
 
 expect 2 -r "$work/missing.log" -c "$work/calls.log"
 expect 2 -r /tmp -c "$work/calls.log"

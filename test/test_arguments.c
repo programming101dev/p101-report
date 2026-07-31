@@ -11,11 +11,12 @@
 #include <p101_c/p101_string.h>
 #include <p101_env/env.h>
 #include <p101_error/error.h>
-#include <p101_posix/p101_stdio.h>
-#include <p101_posix/p101_stdlib.h>
-#include <p101_posix/p101_unistd.h>
+#include <p101_filesystem/filesystem.h>
+#include <p101_io/io.h>
+#include <p101_process/process.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <unistd.h>
 
 static struct p101_error *error;
 static struct p101_env   *env;

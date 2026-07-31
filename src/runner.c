@@ -16,13 +16,28 @@ int p101_report_run(const struct p101_env *env, struct p101_error *err, const st
 
     P101_TRACE_SCOPE(env);
     p101_memset(env, &model, 0, sizeof(model));
-    ret_val         = EXIT_TROUBLE;
-    model.run_model = p101_tool_model_create(err);
+    ret_val = EXIT_TROUBLE;
+    model.run_model =
+#ifdef P101_REPORT_TESTING
+        getenv("P101_REPORT_TEST_FAIL_MODEL_CREATE") == NULL ?
+#endif
+            p101_tool_model_create(err)
+#ifdef P101_REPORT_TESTING
+            :
+            NULL
+#endif
+        ;
     if(model.run_model == NULL)
     {
         goto done;
     }
 
+#ifdef P101_REPORT_TESTING
+    if(getenv("P101_REPORT_TEST_FAIL_INGEST") != NULL)
+    {
+        (void)p101_tool_model_finish(err, model.run_model);
+    }
+#endif
     p101_report_read_resources(env, err, args->resource_log, &model);
     p101_report_read_calls(env, err, args->call_log, &model);
 
@@ -30,7 +45,13 @@ int p101_report_run(const struct p101_env *env, struct p101_error *err, const st
     {
         goto done;
     }
-    if(p101_tool_model_finish(err, model.run_model) != 0)
+    if(p101_tool_model_finish(err,
+#ifdef P101_REPORT_TESTING
+                              getenv("P101_REPORT_TEST_FAIL_MODEL_FINISH") == NULL ? model.run_model : NULL
+#else
+                              model.run_model
+#endif
+                              ) != 0)
     {
         goto done;
     }

@@ -4,8 +4,7 @@
 #include "output.h"
 #include <fcntl.h>
 #include <p101_c/p101_stdio.h>
-#include <p101_posix/p101_fcntl.h>
-#include <p101_posix/p101_unistd.h>
+#include <p101_io/io.h>
 #include <p101_tool_event/model.h>
 #include <stdio.h>
 #include <unistd.h>
