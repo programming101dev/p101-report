@@ -310,7 +310,14 @@ static void p101_report_print_json_lifetime(const struct p101_env *env, struct p
         p101_fputs(env, err, ", \"resource_class\": ", stdout);
         p101_report_json_string(env, err, stdout, birth->resource_class == NULL ? "resource" : birth->resource_class);
         p101_fputs(env, err, ", \"resource_id\": ", stdout);
-        p101_report_json_string(env, err, stdout, resource_id == NULL ? "?" : resource_id);
+        if(resource_id == NULL)
+        {
+            p101_fputs(env, err, "\"?\"", stdout);
+        }
+        else
+        {
+            p101_report_json_string(env, err, stdout, resource_id);
+        }
         p101_printf(env, err, ", \"context_id\": %zu", birth->context_id);
     }
 

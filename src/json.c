@@ -1,12 +1,10 @@
 #include "json.h"
 #include "constants.h"
 #include <p101_c/p101_stdio.h>
-#include <p101_c/p101_string.h>
 
 void p101_report_json_string(const struct p101_env *env, struct p101_error *err, FILE *stream, const char *text)
 {
     const unsigned char *cursor;
-    size_t               length;
 
     p101_fputc(env, err, '\"', stream);
 
@@ -16,12 +14,11 @@ void p101_report_json_string(const struct p101_env *env, struct p101_error *err,
     }
 
     cursor = (const unsigned char *)text;
-    length = p101_strlen(env, text);
-    for(size_t index = 0U; index < length && p101_error_has_no_error(err); index++)
+    while(*cursor != '\0')
     {
         unsigned char current;
 
-        current = cursor[index];
+        current = *cursor;
         if(current == '\"' || current == '\\')
         {
             p101_fputc(env, err, '\\', stream);
@@ -47,6 +44,12 @@ void p101_report_json_string(const struct p101_env *env, struct p101_error *err,
         {
             p101_fputc(env, err, (int)current, stream);
         }
+
+        if(p101_error_has_error(err))
+        {
+            break;
+        }
+        cursor++;
     }
 
 done:
