@@ -6,6 +6,7 @@
 #include "lifetime_mermaid.h"
 #include <p101_c/p101_stdio.h>
 #include <p101_c/p101_string.h>
+#include <p101_tool_event/event.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
