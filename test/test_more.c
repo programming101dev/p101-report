@@ -179,6 +179,7 @@ static void test_parse_statuses_and_cross_stream_records(void)
     model.run_model = p101_tool_model_create(more_error);
     TEST_ASSERT_NOT_NULL(model.run_model);
     TEST_ASSERT_EQUAL_INT(LINE_OK, p101_report_parse_call_line(more_env, more_error, rejected_call_line, &call, &model, 1U));
+    p101_report_free_call_event(more_env, &call);
     p101_report_free_model(more_env, &model);
 
     p101_memset(more_env, &model, 0, sizeof(model));
