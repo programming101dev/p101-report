@@ -19,15 +19,15 @@ expect() {
 }
 
 cat >"$work/resources.log" <<'LOG'
-P101FD	4	123	7	1	100	200	OPEN	3	10	main	fixture.c
-P101ALLOC	4	123	7	2	110	210	ALLOC	0x1000	-	64	11	main	fixture.c
-P101RESOURCE	4	123	7	3	120	220	ACQUIRE	mapping	map-1	-	4096	private	12	main	fixture.c
-P101COMPLETE	4	123	7	4	130	230	3	0	0
+P101FD	5	test-run	123	7	1	100	200	OPEN	3	10	main	fixture.c
+P101ALLOC	5	test-run	123	7	2	110	210	ALLOC	0x1000	-	64	11	main	fixture.c
+P101RESOURCE	5	test-run	123	7	3	120	220	ACQUIRE	mapping	map-1	-	4096	private	12	main	fixture.c
+P101COMPLETE	5	test-run	123	7	4	130	230	3	0	0
 LOG
 cat >"$work/calls.log" <<'LOG'
-P101CALL	4	123	7	1	100	200	ENTER	10	main	p101_open	path=x	-	fixture.c
-P101CALL	4	123	7	2	101	201	EXIT	10	main	p101_open	-	3	fixture.c
-P101COMPLETE	4	123	7	3	130	230	2	0	0
+P101CALL	5	test-run	123	7	1	100	200	ENTER	10	main	p101_open	path=x	-	fixture.c
+P101CALL	5	test-run	123	7	2	101	201	EXIT	10	main	p101_open	-	3	fixture.c
+P101COMPLETE	5	test-run	123	7	3	130	230	2	0	0
 LOG
 
 expect 0 --help
@@ -72,9 +72,9 @@ grep -q '"kind":"call-return"' "$work/run-model.json"
 expect 1 -r "$work/resources.log" -c "$work/calls.log"
 
 cat >"$work/clean-resources.log" <<'LOG'
-P101FD	4	123	7	1	100	200	OPEN	3	10	main	fixture.c
-P101FD	4	123	7	2	110	210	CLOSE	3	11	main	fixture.c
-P101COMPLETE	4	123	7	3	130	230	2	0	0
+P101FD	5	test-run	123	7	1	100	200	OPEN	3	10	main	fixture.c
+P101FD	5	test-run	123	7	2	110	210	CLOSE	3	11	main	fixture.c
+P101COMPLETE	5	test-run	123	7	3	130	230	2	0	0
 LOG
 expect 0 -r "$work/clean-resources.log" -c "$work/calls.log"
 expect 0 -j -r "$work/clean-resources.log" -c "$work/calls.log"
@@ -101,7 +101,7 @@ emit_resource() {
   magic=$1
   shift
   sequence=$((sequence + 1))
-  printf '%s\t4\t200\t9\t%s\t%s\t%s\t%s\n' "$magic" "$sequence" "$((1000 + sequence))" "$((2000 + sequence))" "$*" >>"$all_resources"
+  printf '%s\t5\ttest-run\t200\t9\t%s\t%s\t%s\t%s\n' "$magic" "$sequence" "$((1000 + sequence))" "$((2000 + sequence))" "$*" >>"$all_resources"
 }
 : >"$all_resources"
 emit_resource P101FD $'OPEN\t3\t10\topen_fd\tall.c'
@@ -137,17 +137,17 @@ emit_resource P101RESOURCE $'REPLACE\tmapping\tmap-x\t-\t8192\tprivate\t55\tbad_
 emit_resource P101RESOURCE $'ACQUIRE\tmapping\tmap-2\t-\t1024\tprivate\t56\tacquire_transfer\tall.c'
 emit_resource P101RESOURCE $'TRANSFER\tmapping\tmap-2\tmap-3\t1024\tprivate\t57\ttransfer\tall.c'
 emit_resource P101RESOURCE $'RELEASE\tmapping\tmap-3\t-\t0\t-\t58\trelease_transfer\tall.c'
-printf 'P101COMPLETE\t4\t200\t9\t%s\t9999\t9999\t%s\t0\t0\n' "$((sequence + 1))" "$sequence" >>"$all_resources"
+printf 'P101COMPLETE\t5\ttest-run\t200\t9\t%s\t9999\t9999\t%s\t0\t0\n' "$((sequence + 1))" "$sequence" >>"$all_resources"
 
 all_calls="$work/all-calls.log"
 cat >"$all_calls" <<'LOG'
-P101CALL	4	200	9	1	1001	2001	ENTER	10	open_fd	p101_open	path=x	-	all.c
-P101CALL	4	200	9	2	1002	2002	ENTER	10	open_fd	nested	x	-	all.c
-P101CALL	4	200	9	3	1003	2003	EXIT	10	open_fd	nested	-	ok	all.c
-P101CALL	4	200	9	4	1004	2004	EXIT	10	open_fd	p101_open	-	3	all.c
-P101CALL	4	999	1	1	1005	2005	ENTER	1	other	other	-	-	other.c
-P101COMPLETE	4	200	9	5	9999	9999	4	0	0
-P101COMPLETE	4	999	1	2	9999	9999	1	0	0
+P101CALL	5	test-run	200	9	1	1001	2001	ENTER	10	open_fd	p101_open	path=x	-	all.c
+P101CALL	5	test-run	200	9	2	1002	2002	ENTER	10	open_fd	nested	x	-	all.c
+P101CALL	5	test-run	200	9	3	1003	2003	EXIT	10	open_fd	nested	-	ok	all.c
+P101CALL	5	test-run	200	9	4	1004	2004	EXIT	10	open_fd	p101_open	-	3	all.c
+P101CALL	5	test-run	999	1	1	1005	2005	ENTER	1	other	other	-	-	other.c
+P101COMPLETE	5	test-run	200	9	5	9999	9999	4	0	0
+P101COMPLETE	5	test-run	999	1	2	9999	9999	1	0	0
 LOG
 
 expect 1 -r "$all_resources" -c "$all_calls"
@@ -157,41 +157,41 @@ expect 1 -m -r "$all_resources" -c "$all_calls"
 mixed_resources="$work/mixed-resources.log"
 {
   printf 'ordinary text\n'
-  printf 'P101CALL\t4\t300\t1\t1\t10\t20\tENTER\t1\tf\tcall\t-\t-\tx.c\n'
+  printf 'P101CALL\t5\ttest-run\t300\t1\t1\t10\t20\tENTER\t1\tf\tcall\t-\t-\tx.c\n'
   printf 'P101FD\t3\t300\t1\t2\t11\t21\tOPEN\t3\t1\tf\tx.c\n'
-  printf 'P101FD\t4\tbad\n'
-  printf 'P101COMPLETE\t4\t300\t1\t3\t12\t22\t2\t0\t0\n'
+  printf 'P101FD\t5\ttest-run\tbad\n'
+  printf 'P101COMPLETE\t5\ttest-run\t300\t1\t3\t12\t22\t2\t0\t0\n'
 } >"$mixed_resources"
 mixed_calls="$work/mixed-calls.log"
 {
   printf 'ordinary text\n'
-  printf 'P101FD\t4\t300\t1\t1\t10\t20\tOPEN\t3\t1\tf\tx.c\n'
+  printf 'P101FD\t5\ttest-run\t300\t1\t1\t10\t20\tOPEN\t3\t1\tf\tx.c\n'
   printf 'P101CALL\t3\t300\t1\t2\t11\t21\tENTER\t1\tf\tcall\t-\t-\tx.c\n'
-  printf 'P101CALL\t4\tbad\n'
-  printf 'P101COMPLETE\t4\t300\t1\t3\t12\t22\t2\t0\t0\n'
+  printf 'P101CALL\t5\ttest-run\tbad\n'
+  printf 'P101COMPLETE\t5\ttest-run\t300\t1\t3\t12\t22\t2\t0\t0\n'
 } >"$mixed_calls"
 expect 2 -r "$mixed_resources" -c "$mixed_calls"
 
 malformed_calls="$work/malformed-calls.log"
 {
-  printf 'P101CALL\t4\tbad\n'
-  printf 'P101COMPLETE\t4\t123\t7\t2\t130\t230\t1\t0\t0\n'
+  printf 'P101CALL\t5\ttest-run\tbad\n'
+  printf 'P101COMPLETE\t5\ttest-run\t123\t7\t2\t130\t230\t1\t0\t0\n'
 } >"$malformed_calls"
 expect 2 -r "$work/clean-resources.log" -c "$malformed_calls"
 
 old_calls="$work/old-calls.log"
 {
   printf 'P101CALL\t3\t123\t7\t1\t100\t200\tENTER\t10\tmain\tp101_open\t-\t-\tfixture.c\n'
-  printf 'P101COMPLETE\t4\t123\t7\t2\t130\t230\t1\t0\t0\n'
+  printf 'P101COMPLETE\t5\ttest-run\t123\t7\t2\t130\t230\t1\t0\t0\n'
 } >"$old_calls"
 expect 2 -r "$work/clean-resources.log" -c "$old_calls"
 
 incomplete_resources="$work/incomplete-resources.log"
-printf 'P101FD\t4\t123\t7\t1\t100\t200\tOPEN\t3\t10\tmain\tfixture.c\n' >"$incomplete_resources"
+printf 'P101FD\t5\ttest-run\t123\t7\t1\t100\t200\tOPEN\t3\t10\tmain\tfixture.c\n' >"$incomplete_resources"
 expect 2 -r "$incomplete_resources" -c "$work/calls.log"
 
 incomplete_calls="$work/incomplete-calls.log"
-printf 'P101CALL\t4\t123\t7\t1\t100\t200\tENTER\t10\tmain\tp101_open\t-\t-\tfixture.c\n' >"$incomplete_calls"
+printf 'P101CALL\t5\ttest-run\t123\t7\t1\t100\t200\tENTER\t10\tmain\tp101_open\t-\t-\tfixture.c\n' >"$incomplete_calls"
 expect 2 -r "$work/clean-resources.log" -c "$incomplete_calls"
 
 for index in $(seq 1 45); do

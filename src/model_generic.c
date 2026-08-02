@@ -37,6 +37,8 @@ void p101_report_ingest_generic(const struct p101_env *env, struct p101_error *e
 
     site = &model->sites[event->site];
     p101_memset(env, &record, 0, sizeof(record));
+    record.version                = P101_TOOL_EVENT_LOG_VERSION;
+    record.run_id                 = model->resource_stream_health.run_id[0] == '\0' ? "p101-report-internal" : model->resource_stream_health.run_id;
     record.record_kind            = P101_TOOL_EVENT_RECORD_RESOURCE;
     record.pid                    = event->pid;
     record.context_id             = event->context_id;

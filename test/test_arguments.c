@@ -119,7 +119,7 @@ static void test_parse_rejects_missing_call_log(void)
 
 static void test_parse_resource_line_accepts_fd_open(void)
 {
-    char                  line[] = "P101FD\t4\t42\t7\t1\t100\t200\tOPEN\t3\t17\tmain\tserver.c\n";
+    char                  line[] = "P101FD\t5\ttest-run\t42\t7\t1\t100\t200\tOPEN\t3\t17\tmain\tserver.c\n";
     struct report_model   model;
     struct resource_event event;
     enum line_status      status;
@@ -164,7 +164,7 @@ static void test_parse_resource_line_rejects_old_fd_open(void)
 
 static void test_parse_resource_line_accepts_spawn_boundary(void)
 {
-    char                  line[] = "P101SPAWN\t4\t42\t1\t2\t110\t210\t43\t18\tp101_posix_spawn\tspawn.c\t/usr/bin/true\n";
+    char                  line[] = "P101SPAWN\t5\ttest-run\t42\t1\t2\t110\t210\t43\t18\tp101_posix_spawn\tspawn.c\t/usr/bin/true\n";
     struct report_model   model;
     struct resource_event event;
     enum line_status      status;
@@ -194,7 +194,7 @@ static void test_parse_resource_line_accepts_spawn_boundary(void)
 
 static void test_generic_resource_lifecycle_produces_source_backed_finding(void)
 {
-    char                  acquire_line[] = "P101RESOURCE\t4\t42\t7\t8\t100\t200\tACQUIRE\tmapping\t0x1000\t-\t4096\tprivate\t21\tmap_file\tmap.c\n";
+    char                  acquire_line[] = "P101RESOURCE\t5\ttest-run\t42\t7\t8\t100\t200\tACQUIRE\tmapping\t0x1000\t-\t4096\tprivate\t21\tmap_file\tmap.c\n";
     struct report_model   model;
     struct resource_event event;
 
@@ -228,8 +228,8 @@ static void test_generic_resource_lifecycle_produces_source_backed_finding(void)
 
 static void test_generic_resource_balanced_lifecycle_has_no_finding(void)
 {
-    char                  acquire_line[] = "P101RESOURCE\t4\t42\t7\t8\t100\t200\tACQUIRE\tmapping\t0x1000\t-\t4096\tprivate\t21\tmap_file\tmap.c\n";
-    char                  release_line[] = "P101RESOURCE\t4\t42\t8\t9\t110\t210\tRELEASE\tmapping\t0x1000\t-\t0\t-\t22\tunmap_file\tmap.c\n";
+    char                  acquire_line[] = "P101RESOURCE\t5\ttest-run\t42\t7\t8\t100\t200\tACQUIRE\tmapping\t0x1000\t-\t4096\tprivate\t21\tmap_file\tmap.c\n";
+    char                  release_line[] = "P101RESOURCE\t5\ttest-run\t42\t8\t9\t110\t210\tRELEASE\tmapping\t0x1000\t-\t0\t-\t22\tunmap_file\tmap.c\n";
     struct report_model   model;
     struct resource_event event;
 
@@ -254,7 +254,7 @@ static void test_generic_resource_balanced_lifecycle_has_no_finding(void)
 
 static void test_parse_call_line_accepts_exit(void)
 {
-    char                line[] = "P101CALL\t4\t42\t7\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
+    char                line[] = "P101CALL\t5\ttest-run\t42\t7\t1\t100\t200\tEXIT\t17\tmain\tp101_open\t-\t3\tserver.c\n";
     struct call_event   event;
     struct report_model model;
     enum line_status    status;
@@ -297,9 +297,9 @@ static void test_parse_call_line_rejects_old_exit(void)
 
 static void test_failed_exec_removes_only_its_inheritance_findings(void)
 {
-    char                  open_line[] = "P101FD\t4\t42\t1\t1\t100\t200\tOPEN\t3\t17\tmain\tserver.c\n";
-    char                  exec_line[] = "P101EXEC\t4\t42\t1\t2\t110\t210\t3\t0\t18\tmain\tserver.c\tmissing\n";
-    char                  fail_line[] = "P101EXECFAIL\t4\t42\t1\t3\t120\t220\t18\tmain\tserver.c\tmissing\n";
+    char                  open_line[] = "P101FD\t5\ttest-run\t42\t1\t1\t100\t200\tOPEN\t3\t17\tmain\tserver.c\n";
+    char                  exec_line[] = "P101EXEC\t5\ttest-run\t42\t1\t2\t110\t210\t3\t0\t18\tmain\tserver.c\tmissing\n";
+    char                  fail_line[] = "P101EXECFAIL\t5\ttest-run\t42\t1\t3\t120\t220\t18\tmain\tserver.c\tmissing\n";
     struct report_model   model;
     struct resource_event event;
 

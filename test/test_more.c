@@ -139,15 +139,15 @@ static void test_parse_statuses_and_cross_stream_records(void)
     struct report_model   model;
     struct resource_event resource;
     struct call_event     call;
-    char                  call_line[]         = "P101CALL\t4\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
-    char                  fd_line[]           = "P101FD\t4\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
-    char                  complete_resource[] = "P101COMPLETE\t4\t1\t1\t3\t12\t22\t2\t0\t0\n";
-    char                  complete_call[]     = "P101COMPLETE\t4\t1\t1\t3\t12\t22\t2\t0\t0\n";
-    char                  null_call[]         = "P101CALL\t4\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
-    char                  rejected_fd_line[]  = "P101FD\t4\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
-    char                  rejected_call_line[] = "P101CALL\t4\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
-    char                  finished_fd_line[] = "P101FD\t4\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
-    char                  finished_call_line[] = "P101CALL\t4\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
+    char                  call_line[]         = "P101CALL\t5\ttest-run\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
+    char                  fd_line[]           = "P101FD\t5\ttest-run\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
+    char                  complete_resource[] = "P101COMPLETE\t5\ttest-run\t1\t1\t3\t12\t22\t2\t0\t0\n";
+    char                  complete_call[]     = "P101COMPLETE\t5\ttest-run\t1\t1\t3\t12\t22\t2\t0\t0\n";
+    char                  null_call[]         = "P101CALL\t5\ttest-run\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
+    char                  rejected_fd_line[]  = "P101FD\t5\ttest-run\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
+    char                  rejected_call_line[] = "P101CALL\t5\ttest-run\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
+    char                  finished_fd_line[] = "P101FD\t5\ttest-run\t1\t1\t2\t11\t21\tOPEN\t3\t3\tf\ta.c\n";
+    char                  finished_call_line[] = "P101CALL\t5\ttest-run\t1\t1\t1\t10\t20\tENTER\t3\tf\tp101_open\tx\t-\ta.c\n";
 
     p101_memset(more_env, &model, 0, sizeof(model));
     p101_memset(more_env, &resource, 0, sizeof(resource));
